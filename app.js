@@ -1,6 +1,7 @@
 /* ====== PUZZLE TRACKER APP LOGIC ====== */
 
-const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file";
+const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email";
+const OWNER_EMAIL = "mzbazeball@gmail.com";
 const SHEET_RANGE_READ = "Sheet1!A2:I";
 const SHEET_RANGE_APPEND = "Sheet1!A1";
 
@@ -20,7 +21,7 @@ const GROUP_TITLES = {
   yearmonth: "Year and Month"
 };
 
-const TOKEN_STORAGE_KEY = "puzzleTrackerToken";
+const TOKEN_STORAGE_KEY = "puzzleTrackerToken_v2"; // bumped: added userinfo.email scope
 const TOKEN_EXPIRY_BUFFER_MS = 2 * 60 * 1000; // refresh 2 min early
 
 // ---------- Token caching ----------
@@ -129,9 +130,29 @@ function renderSignInButton() {
   wrap.appendChild(btn);
 }
 
-function onSignedIn() {
+async function onSignedIn() {
   document.getElementById("signOutBtn").style.visibility = "visible";
   showScreen("screen-home", false);
+  await applyAccessControls();
+}
+
+async function applyAccessControls() {
+  const trackBtn = document.getElementById("btnTrack");
+  try {
+    const resp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: "Bearer " + accessToken }
+    });
+    const data = await resp.json();
+    if (data.email && data.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
+      trackBtn.style.display = "";
+    } else {
+      trackBtn.style.display = "none";
+    }
+  } catch (err) {
+    console.error("Could not verify account email", err);
+    // Fail safe: hide the track button if we can't confirm the account
+    trackBtn.style.display = "none";
+  }
 }
 
 document.getElementById("signOutBtn").addEventListener("click", () => {
