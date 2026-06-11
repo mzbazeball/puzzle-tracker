@@ -28,6 +28,7 @@ let bulkPuzzles = [];
 const GROUP_TITLES = {
   pieces: "Piece Count",
   brand: "Brand",
+  year: "Year",
   yearmonth: "Year and Month"
 };
 
@@ -233,6 +234,7 @@ function showScreen(id, pushHistory = true) {
     "screen-home": "Puzzle Tracker",
     "screen-track": "Track a Puzzle",
     "screen-view-options": "View Tracked Puzzles",
+    "screen-view-date-options": "View by Date",
     "screen-view-categories": "View Tracked Puzzles",
     "screen-view-results": "Tracked Puzzles",
     "screen-bulk-photos": "Bulk Add Photos"
@@ -266,6 +268,10 @@ document.getElementById("btnTrack").addEventListener("click", () => {
 
 document.getElementById("btnView").addEventListener("click", () => {
   showScreen("screen-view-options");
+});
+
+document.getElementById("btnViewByDate").addEventListener("click", () => {
+  showScreen("screen-view-date-options");
 });
 
 document.getElementById("btnBulkPhotos").addEventListener("click", async () => {
@@ -587,6 +593,17 @@ function groupPuzzles(puzzles, key) {
       groupName = range ? { sortKey: range.min, label: range.label } : { sortKey: -1, label: "Unknown piece count" };
     } else if (key === "brand") {
       groupName = p.brand || "Unknown brand";
+    } else if (key === "year") {
+      if (p.date) {
+        const d = new Date(p.date + "T00:00:00");
+        if (!isNaN(d)) {
+          groupName = { sortKey: p.date.slice(0, 4), label: p.date.slice(0, 4) };
+        } else {
+          groupName = { sortKey: "0000", label: "Unknown date" };
+        }
+      } else {
+        groupName = { sortKey: "0000", label: "Unknown date" };
+      }
     } else {
       // yearmonth
       if (p.date) {
