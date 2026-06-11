@@ -301,6 +301,15 @@ document.querySelectorAll(".option-btn[data-group]").forEach((btn) => {
       return;
     }
 
+    if (currentGroupKey === "wooden") {
+      currentGroupValue = "Wooden Puzzles";
+      showScreen("screen-view-results");
+      document.getElementById("headerTitle").textContent = currentGroupValue;
+      document.getElementById("sortRow").style.display = "none";
+      await loadAndRenderWooden();
+      return;
+    }
+
     currentGroupValue = null;
     showScreen("screen-view-categories");
     document.getElementById("headerTitle").textContent = GROUP_TITLES[currentGroupKey] || "View Tracked Puzzles";
@@ -544,6 +553,22 @@ async function loadAndRenderAll() {
     allPuzzles = await fetchAllPuzzles();
     const items = [...allPuzzles].sort((a, b) => (a.date < b.date ? 1 : -1));
     currentGroups = [{ label: "All Tracked Puzzles", items }];
+    renderResults();
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = '<div class="status-msg">Error loading puzzles.</div>';
+  }
+}
+
+async function loadAndRenderWooden() {
+  const container = document.getElementById("resultsContainer");
+  container.innerHTML = '<div class="status-msg">Loading...</div>';
+  try {
+    allPuzzles = await fetchAllPuzzles();
+    const items = allPuzzles
+      .filter((p) => p.wooden)
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    currentGroups = [{ label: "Wooden Puzzles", items }];
     renderResults();
   } catch (err) {
     console.error(err);
