@@ -18,6 +18,11 @@ let isOwner = false;
 let editingPuzzle = null; // puzzle object being edited, or null when adding new
 let currentModalPuzzle = null; // puzzle currently shown in the detail modal
 
+// Bulk photo add state
+let bulkFiles = [];
+let bulkIndex = 0;
+let bulkPuzzles = [];
+
 const GROUP_TITLES = {
   pieces: "Piece Count",
   brand: "Brand",
@@ -141,6 +146,7 @@ async function onSignedIn() {
 
 async function applyAccessControls() {
   const trackBtn = document.getElementById("btnTrack");
+  const bulkBtn = document.getElementById("btnBulkPhotos");
   try {
     const resp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: "Bearer " + accessToken }
@@ -148,11 +154,13 @@ async function applyAccessControls() {
     const data = await resp.json();
     isOwner = !!(data.email && data.email.toLowerCase() === OWNER_EMAIL.toLowerCase());
     trackBtn.style.display = isOwner ? "" : "none";
+    bulkBtn.style.display = isOwner ? "" : "none";
   } catch (err) {
     console.error("Could not verify account email", err);
-    // Fail safe: hide the track button if we can't confirm the account
+    // Fail safe: hide owner-only buttons if we can't confirm the account
     isOwner = false;
     trackBtn.style.display = "none";
+    bulkBtn.style.display = "none";
   }
 }
 
@@ -181,7 +189,8 @@ function showScreen(id, pushHistory = true) {
     "screen-track": "Track a Puzzle",
     "screen-view-options": "View Tracked Puzzles",
     "screen-view-categories": "View Tracked Puzzles",
-    "screen-view-results": "Tracked Puzzles"
+    "screen-view-results": "Tracked Puzzles",
+    "screen-bulk-photos": "Bulk Add Photos"
   };
   document.getElementById("headerTitle").textContent = titles[id] || "Puzzle Tracker";
 
@@ -212,6 +221,19 @@ document.getElementById("btnTrack").addEventListener("click", () => {
 
 document.getElementById("btnView").addEventListener("click", () => {
   showScreen("screen-view-options");
+});
+
+document.getElementById("btnBulkPhotos").addEventListener("click", async () => {
+  showScreen("screen-bulk-photos");
+  resetBulkPhotos();
+  document.getElementById("bulkProgress").textContent = "Loading puzzles...";
+  try {
+    bulkPuzzles = await fetchAllPuzzles();
+    document.getElementById("bulkProgress").textContent = "Choose photos to begin.";
+  } catch (err) {
+    console.error(err);
+    document.getElementById("bulkProgress").textContent = "Error loading puzzles. Try again.";
+  }
 });
 
 document.querySelectorAll(".option-btn[data-group]").forEach((btn) => {
@@ -665,6 +687,154 @@ function startEditPuzzle(p) {
   showScreen("screen-track");
   document.getElementById("headerTitle").textContent = "Edit Puzzle";
 }
+
+// ---------- Bulk Add Photos ----------
+
+function resetBulkPhotos() {
+  bulkFiles = [];
+  bulkIndex = 0;
+  document.getElementById("bulk-photo-input").value = "";
+  document.getElementById("bulkPhotoPreview").style.display = "none";
+  document.getElementById("bulkPhotoPreview").src = "";
+  document.getElementById("bulk-search").value = "";
+  document.getElementById("bulkSearchField").style.display = "none";
+  document.getElementById("bulkSkip").style.display = "none";
+  document.getElementById("bulkResultsList").innerHTML = "";
+  document.getElementById("bulkProgress").textContent = "Choose photos to begin.";
+}
+
+document.getElementById("bulk-photo-input").addEventListener("change", (e) => {
+  bulkFiles = Array.from(e.target.files);
+  bulkIndex = 0;
+  showBulkPhoto();
+});
+
+function showBulkPhoto() {
+  const preview = document.getElementById("bulkPhotoPreview");
+  const progress = document.getElementById("bulkProgress");
+  const searchField = document.getElementById("bulkSearchField");
+  const skipBtn = document.getElementById("bulkSkip");
+  const search = document.getElementById("bulk-search");
+
+  if (!bulkFiles.length) {
+    preview.style.display = "none";
+    searchField.style.display = "none";
+    skipBtn.style.display = "none";
+    document.getElementById("bulkResultsList").innerHTML = "";
+    progress.textContent = "Choose photos to begin.";
+    return;
+  }
+
+  if (bulkIndex >= bulkFiles.length) {
+    preview.style.display = "none";
+    searchField.style.display = "none";
+    skipBtn.style.display = "none";
+    document.getElementById("bulkResultsList").innerHTML = "";
+    progress.textContent = `All done! Processed ${bulkFiles.length} photo${bulkFiles.length === 1 ? "" : "s"}.`;
+    return;
+  }
+
+  const file = bulkFiles[bulkIndex];
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    preview.src = ev.target.result;
+    preview.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+
+  progress.textContent = `Photo ${bulkIndex + 1} of ${bulkFiles.length} — find the matching puzzle below`;
+  searchField.style.display = "";
+  skipBtn.style.display = "";
+  search.value = "";
+  renderBulkResults("");
+}
+
+document.getElementById("bulk-search").addEventListener("input", (e) => {
+  renderBulkResults(e.target.value.trim().toLowerCase());
+});
+
+function renderBulkResults(query) {
+  const container = document.getElementById("bulkResultsList");
+  container.innerHTML = "";
+
+  if (!query) {
+    container.innerHTML = '<div class="empty-msg">Type to search for the matching puzzle.</div>';
+    return;
+  }
+
+  const matches = bulkPuzzles.filter((p) =>
+    (p.title && p.title.toLowerCase().includes(query)) ||
+    (p.brand && p.brand.toLowerCase().includes(query))
+  ).slice(0, 25);
+
+  if (!matches.length) {
+    container.innerHTML = '<div class="empty-msg">No matching puzzles.</div>';
+    return;
+  }
+
+  matches.forEach((p) => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    const hasPhoto = p.imageFileId ? " — already has a photo (will be replaced)" : "";
+    item.innerHTML = `
+      <div class="meta">
+        <div>${escapeHtml(p.date)}</div>
+        <div class="b">${escapeHtml(p.brand)} — ${escapeHtml(p.title)}</div>
+        <div>${escapeHtml(p.pieces)} pieces${hasPhoto}</div>
+      </div>`;
+    item.addEventListener("click", () => assignBulkPhoto(p));
+    container.appendChild(item);
+  });
+}
+
+async function assignBulkPhoto(puzzle) {
+  const progress = document.getElementById("bulkProgress");
+  const file = bulkFiles[bulkIndex];
+
+  progress.textContent = `Uploading photo ${bulkIndex + 1} of ${bulkFiles.length}...`;
+  document.getElementById("bulkSearchField").style.display = "none";
+  document.getElementById("bulkSkip").style.display = "none";
+  document.getElementById("bulkResultsList").innerHTML = "";
+
+  try {
+    const newFileId = await uploadPhotoToDrive(
+      file,
+      `${puzzle.date}_${puzzle.brand}_${puzzle.title}`.replace(/[^a-zA-Z0-9_-]/g, "_")
+    );
+
+    if (puzzle.imageFileId) {
+      await deletePhotoFromDrive(puzzle.imageFileId);
+    }
+
+    const row = [
+      puzzle.id,
+      puzzle.date,
+      puzzle.brand,
+      puzzle.title,
+      puzzle.artist,
+      puzzle.pieces,
+      puzzle.wooden ? "TRUE" : "FALSE",
+      puzzle.notCompleted ? "TRUE" : "FALSE",
+      newFileId
+    ];
+    await updatePuzzleRow(puzzle.rowNumber, row);
+    puzzle.imageFileId = newFileId;
+
+    bulkIndex++;
+    showBulkPhoto();
+  } catch (err) {
+    console.error(err);
+    progress.textContent = "Error uploading photo. Try again or skip.";
+    document.getElementById("bulkSearchField").style.display = "";
+    document.getElementById("bulkSkip").style.display = "";
+    renderBulkResults(document.getElementById("bulk-search").value.trim().toLowerCase());
+  }
+}
+
+document.getElementById("bulkSkip").addEventListener("click", () => {
+  bulkIndex++;
+  showBulkPhoto();
+});
 
 // ---------- Init ----------
 
