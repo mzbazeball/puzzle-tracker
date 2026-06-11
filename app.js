@@ -6,7 +6,9 @@ const SHEET_RANGE_READ = "Sheet1!A2:I";
 const SHEET_RANGE_APPEND = "Sheet1!A1";
 
 let tokenClient;
+let refreshTokenClient;
 let accessToken = null;
+let tokenExpiresAt = 0;
 let gapiInited = false;
 let allPuzzles = []; // cached rows from sheet
 let currentGroups = []; // groups computed for the current grouping
@@ -36,6 +38,7 @@ const TOKEN_EXPIRY_BUFFER_MS = 2 * 60 * 1000; // refresh 2 min early
 
 function saveToken(token, expiresInSeconds) {
   const expiresAt = Date.now() + expiresInSeconds * 1000;
+  tokenExpiresAt = expiresAt;
   try {
     localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token, expiresAt }));
   } catch (e) {
@@ -50,6 +53,7 @@ function loadStoredToken() {
     const data = JSON.parse(raw);
     if (!data.token || !data.expiresAt) return null;
     if (Date.now() > data.expiresAt - TOKEN_EXPIRY_BUFFER_MS) return null; // expired/expiring
+    tokenExpiresAt = data.expiresAt;
     return data.token;
   } catch (e) {
     return null;
@@ -57,10 +61,51 @@ function loadStoredToken() {
 }
 
 function clearStoredToken() {
+  tokenExpiresAt = 0;
   try {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
   } catch (e) {
     // ignore
+  }
+}
+
+// Silently get a fresh access token without interrupting the user or
+// navigating away from the current screen. Relies on the user still
+// having an active Google session in this browser.
+function silentRefreshToken() {
+  return new Promise((resolve, reject) => {
+    if (!refreshTokenClient) {
+      refreshTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CONFIG.CLIENT_ID,
+        scope: SCOPES,
+        callback: () => {} // overwritten per-call below
+      });
+    }
+    refreshTokenClient.callback = (resp) => {
+      if (resp.error) {
+        reject(new Error(resp.error));
+        return;
+      }
+      accessToken = resp.access_token;
+      gapi.client.setToken({ access_token: accessToken });
+      saveToken(accessToken, resp.expires_in || 3600);
+      resolve(accessToken);
+    };
+    refreshTokenClient.requestAccessToken({ prompt: "" });
+  });
+}
+
+// Call before any API request. Refreshes the token in the background
+// if it's expired or about to expire, so long sessions (bulk photo
+// uploads, leaving the tab open, etc.) don't hit a sign-in wall.
+async function ensureFreshToken() {
+  if (!accessToken || Date.now() > tokenExpiresAt - TOKEN_EXPIRY_BUFFER_MS) {
+    try {
+      await silentRefreshToken();
+    } catch (err) {
+      console.warn("Silent token refresh failed", err);
+      throw err;
+    }
   }
 }
 
@@ -369,6 +414,8 @@ document.getElementById("trackForm").addEventListener("submit", async (e) => {
 // ---------- Google Drive upload ----------
 
 async function uploadPhotoToDrive(file, baseName) {
+  await ensureFreshToken();
+
   const metadata = {
     name: baseName + "." + (file.type.split("/")[1] || "jpg"),
     parents: [CONFIG.DRIVE_FOLDER_ID],
@@ -408,6 +455,7 @@ function driveImageUrl(fileId, size = 400) {
 // ---------- Google Sheets read/write ----------
 
 async function appendPuzzleRow(row) {
+  await ensureFreshToken();
   await gapi.client.sheets.spreadsheets.values.append({
     spreadsheetId: CONFIG.SPREADSHEET_ID,
     range: SHEET_RANGE_APPEND,
@@ -418,6 +466,7 @@ async function appendPuzzleRow(row) {
 }
 
 async function updatePuzzleRow(rowNumber, row) {
+  await ensureFreshToken();
   await gapi.client.sheets.spreadsheets.values.update({
     spreadsheetId: CONFIG.SPREADSHEET_ID,
     range: `Sheet1!A${rowNumber}:I${rowNumber}`,
@@ -428,6 +477,7 @@ async function updatePuzzleRow(rowNumber, row) {
 
 async function deletePhotoFromDrive(fileId) {
   try {
+    await ensureFreshToken();
     await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
       method: "DELETE",
       headers: { Authorization: "Bearer " + accessToken }
@@ -438,6 +488,7 @@ async function deletePhotoFromDrive(fileId) {
 }
 
 async function fetchAllPuzzles() {
+  await ensureFreshToken();
   const resp = await gapi.client.sheets.spreadsheets.values.get({
     spreadsheetId: CONFIG.SPREADSHEET_ID,
     range: SHEET_RANGE_READ
