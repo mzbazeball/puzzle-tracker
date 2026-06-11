@@ -20,6 +20,41 @@ const GROUP_TITLES = {
   yearmonth: "Year and Month"
 };
 
+const TOKEN_STORAGE_KEY = "puzzleTrackerToken";
+const TOKEN_EXPIRY_BUFFER_MS = 2 * 60 * 1000; // refresh 2 min early
+
+// ---------- Token caching ----------
+
+function saveToken(token, expiresInSeconds) {
+  const expiresAt = Date.now() + expiresInSeconds * 1000;
+  try {
+    localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token, expiresAt }));
+  } catch (e) {
+    console.warn("Could not save token to localStorage", e);
+  }
+}
+
+function loadStoredToken() {
+  try {
+    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data.token || !data.expiresAt) return null;
+    if (Date.now() > data.expiresAt - TOKEN_EXPIRY_BUFFER_MS) return null; // expired/expiring
+    return data.token;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearStoredToken() {
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch (e) {
+    // ignore
+  }
+}
+
 // ---------- Google API loading ----------
 
 function loadScript(src) {
@@ -63,13 +98,23 @@ async function initGoogle() {
       }
       accessToken = resp.access_token;
       gapi.client.setToken({ access_token: accessToken });
+      saveToken(accessToken, resp.expires_in || 3600);
       onSignedIn();
     }
   });
 
   renderSignInButton();
 
-  // Try silent sign-in (works if user previously granted access this session/browser)
+  // Use a cached token if we still have a valid one
+  const cached = loadStoredToken();
+  if (cached) {
+    accessToken = cached;
+    gapi.client.setToken({ access_token: accessToken });
+    onSignedIn();
+    return;
+  }
+
+  // Otherwise try silent sign-in (works if user previously granted access this session/browser)
   tokenClient.requestAccessToken({ prompt: "" });
 }
 
@@ -95,6 +140,7 @@ document.getElementById("signOutBtn").addEventListener("click", () => {
   }
   accessToken = null;
   gapi.client.setToken(null);
+  clearStoredToken();
   document.getElementById("signOutBtn").style.visibility = "hidden";
   navStack = ["screen-home"];
   showScreen("screen-signin", false);
