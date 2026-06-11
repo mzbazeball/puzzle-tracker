@@ -14,6 +14,9 @@ let currentGroupKey = null; // 'pieces' | 'brand' | 'yearmonth'
 let currentGroupValue = null; // selected category label, e.g. "1000 pieces"
 let currentViewMode = "grid"; // 'grid' | 'list'
 let navStack = ["screen-home"];
+let isOwner = false;
+let editingPuzzle = null; // puzzle object being edited, or null when adding new
+let currentModalPuzzle = null; // puzzle currently shown in the detail modal
 
 const GROUP_TITLES = {
   pieces: "Piece Count",
@@ -143,14 +146,12 @@ async function applyAccessControls() {
       headers: { Authorization: "Bearer " + accessToken }
     });
     const data = await resp.json();
-    if (data.email && data.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
-      trackBtn.style.display = "";
-    } else {
-      trackBtn.style.display = "none";
-    }
+    isOwner = !!(data.email && data.email.toLowerCase() === OWNER_EMAIL.toLowerCase());
+    trackBtn.style.display = isOwner ? "" : "none";
   } catch (err) {
     console.error("Could not verify account email", err);
     // Fail safe: hide the track button if we can't confirm the account
+    isOwner = false;
     trackBtn.style.display = "none";
   }
 }
@@ -258,11 +259,13 @@ function setViewMode(mode) {
 // ---------- Track Form ----------
 
 function resetTrackForm() {
+  editingPuzzle = null;
   document.getElementById("trackForm").reset();
   document.getElementById("photoPreview").style.display = "none";
   document.getElementById("photoPreview").src = "";
   document.getElementById("trackStatus").textContent = "";
   document.getElementById("f-date").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("saveBtn").textContent = "Save Puzzle";
 }
 
 document.getElementById("f-photo").addEventListener("change", (e) => {
@@ -294,22 +297,45 @@ document.getElementById("trackForm").addEventListener("submit", async (e) => {
     const notCompleted = document.getElementById("f-notcompleted").checked;
     const photoFile = document.getElementById("f-photo").files[0];
 
-    let imageUrl = "";
-    if (photoFile) {
-      status.textContent = "Uploading photo...";
-      imageUrl = await uploadPhotoToDrive(photoFile, `${date}_${brand}_${title}`.replace(/[^a-zA-Z0-9_-]/g, "_"));
+    if (editingPuzzle) {
+      let imageFileId = editingPuzzle.imageFileId || "";
+      if (photoFile) {
+        status.textContent = "Uploading photo...";
+        const newFileId = await uploadPhotoToDrive(photoFile, `${date}_${brand}_${title}`.replace(/[^a-zA-Z0-9_-]/g, "_"));
+        if (imageFileId) {
+          await deletePhotoFromDrive(imageFileId);
+        }
+        imageFileId = newFileId;
+      }
+
+      status.textContent = "Saving changes...";
+      const row = [editingPuzzle.id, date, brand, title, artist, pieces, wooden ? "TRUE" : "FALSE", notCompleted ? "TRUE" : "FALSE", imageFileId];
+      await updatePuzzleRow(editingPuzzle.rowNumber, row);
+
+      status.textContent = "Saved!";
+      resetTrackForm();
+      setTimeout(() => {
+        showScreen("screen-home", false);
+        navStack = ["screen-home"];
+      }, 600);
+    } else {
+      let imageUrl = "";
+      if (photoFile) {
+        status.textContent = "Uploading photo...";
+        imageUrl = await uploadPhotoToDrive(photoFile, `${date}_${brand}_${title}`.replace(/[^a-zA-Z0-9_-]/g, "_"));
+      }
+
+      status.textContent = "Saving puzzle details...";
+      const id = Date.now().toString();
+      await appendPuzzleRow([id, date, brand, title, artist, pieces, wooden ? "TRUE" : "FALSE", notCompleted ? "TRUE" : "FALSE", imageUrl]);
+
+      status.textContent = "Saved!";
+      resetTrackForm();
+      setTimeout(() => {
+        showScreen("screen-home", false);
+        navStack = ["screen-home"];
+      }, 600);
     }
-
-    status.textContent = "Saving puzzle details...";
-    const id = Date.now().toString();
-    await appendPuzzleRow([id, date, brand, title, artist, pieces, wooden ? "TRUE" : "FALSE", notCompleted ? "TRUE" : "FALSE", imageUrl]);
-
-    status.textContent = "Saved!";
-    resetTrackForm();
-    setTimeout(() => {
-      showScreen("screen-home", false);
-      navStack = ["screen-home"];
-    }, 600);
   } catch (err) {
     console.error(err);
     status.textContent = "Error saving puzzle. Please try again.";
@@ -369,6 +395,26 @@ async function appendPuzzleRow(row) {
   });
 }
 
+async function updatePuzzleRow(rowNumber, row) {
+  await gapi.client.sheets.spreadsheets.values.update({
+    spreadsheetId: CONFIG.SPREADSHEET_ID,
+    range: `Sheet1!A${rowNumber}:I${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    resource: { values: [row] }
+  });
+}
+
+async function deletePhotoFromDrive(fileId) {
+  try {
+    await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + accessToken }
+    });
+  } catch (err) {
+    console.warn("Could not delete old photo from Drive", err);
+  }
+}
+
 async function fetchAllPuzzles() {
   const resp = await gapi.client.sheets.spreadsheets.values.get({
     spreadsheetId: CONFIG.SPREADSHEET_ID,
@@ -376,8 +422,9 @@ async function fetchAllPuzzles() {
   });
   const rows = resp.result.values || [];
   return rows
-    .filter((r) => r.length > 0 && r[0])
-    .map((r) => ({
+    .map((r, idx) => ({ r, rowNumber: idx + 2 }))
+    .filter(({ r }) => r.length > 0 && r[0])
+    .map(({ r, rowNumber }) => ({
       id: r[0] || "",
       date: r[1] || "",
       brand: r[2] || "",
@@ -386,7 +433,8 @@ async function fetchAllPuzzles() {
       pieces: r[5] || "",
       wooden: (r[6] || "").toString().toUpperCase() === "TRUE",
       notCompleted: (r[7] || "").toString().toUpperCase() === "TRUE",
-      imageFileId: r[8] || ""
+      imageFileId: r[8] || "",
+      rowNumber
     }));
 }
 
@@ -548,6 +596,7 @@ function escapeHtml(str) {
 // ---------- Modal ----------
 
 function openModal(p) {
+  currentModalPuzzle = p;
   const modalImg = document.getElementById("modalImg");
   const modalNoImg = document.getElementById("modalNoImg");
   const imgUrl = driveImageUrl(p.imageFileId, 800);
@@ -569,6 +618,8 @@ function openModal(p) {
   document.getElementById("modalWooden").textContent = p.wooden ? "Yes" : "No";
   document.getElementById("modalCompleted").textContent = p.notCompleted ? "No" : "Yes";
 
+  document.getElementById("modalEdit").style.display = isOwner ? "" : "none";
+
   document.getElementById("modalOverlay").classList.add("active");
 }
 
@@ -580,6 +631,40 @@ document.getElementById("modalOverlay").addEventListener("click", (e) => {
     document.getElementById("modalOverlay").classList.remove("active");
   }
 });
+
+document.getElementById("modalEdit").addEventListener("click", () => {
+  if (!currentModalPuzzle) return;
+  startEditPuzzle(currentModalPuzzle);
+  document.getElementById("modalOverlay").classList.remove("active");
+});
+
+function startEditPuzzle(p) {
+  editingPuzzle = p;
+
+  document.getElementById("trackForm").reset();
+  document.getElementById("trackStatus").textContent = "";
+  document.getElementById("f-date").value = p.date || "";
+  document.getElementById("f-brand").value = p.brand || "";
+  document.getElementById("f-title").value = p.title || "";
+  document.getElementById("f-artist").value = p.artist || "";
+  document.getElementById("f-pieces").value = p.pieces || "";
+  document.getElementById("f-wooden").checked = !!p.wooden;
+  document.getElementById("f-notcompleted").checked = !!p.notCompleted;
+
+  const preview = document.getElementById("photoPreview");
+  const existingUrl = driveImageUrl(p.imageFileId, 400);
+  if (existingUrl) {
+    preview.src = existingUrl;
+    preview.style.display = "block";
+  } else {
+    preview.style.display = "none";
+    preview.src = "";
+  }
+
+  document.getElementById("saveBtn").textContent = "Update Puzzle";
+  showScreen("screen-track");
+  document.getElementById("headerTitle").textContent = "Edit Puzzle";
+}
 
 // ---------- Init ----------
 
