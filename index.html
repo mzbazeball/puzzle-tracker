@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Puzzle Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#5b4636">
+<style>
+  :root{
+    --brown:#5b4636;
+    --tan:#e8dcc8;
+    --cream:#faf6ef;
+    --accent:#c1664f;
+    --text:#3a2f28;
+    --border:#d8cdb8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--cream);
+    color:var(--text);
+    -webkit-tap-highlight-color: transparent;
+  }
+  header{
+    background:var(--brown);
+    color:#fff;
+    padding:16px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    position:sticky;
+    top:0;
+    z-index:50;
+  }
+  header h1{margin:0;font-size:1.2rem;font-weight:600;}
+  header .back{
+    background:none;border:none;color:#fff;font-size:1rem;cursor:pointer;padding:4px 8px;
+  }
+  main{
+    max-width:600px;
+    margin:0 auto;
+    padding:20px;
+    padding-bottom:80px;
+  }
+  .screen{display:none;}
+  .screen.active{display:block;}
+
+  /* Buttons */
+  .big-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    width:100%;
+    padding:24px;
+    margin-bottom:16px;
+    font-size:1.15rem;
+    font-weight:600;
+    color:#fff;
+    background:var(--brown);
+    border:none;
+    border-radius:14px;
+    cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,0.12);
+  }
+  .big-btn:active{opacity:0.85;}
+  .big-btn.secondary{background:var(--accent);}
+
+  .option-btn{
+    display:block;
+    width:100%;
+    padding:16px;
+    margin-bottom:12px;
+    font-size:1rem;
+    font-weight:600;
+    color:var(--brown);
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:10px;
+    cursor:pointer;
+    text-align:left;
+  }
+  .option-btn:active{background:var(--tan);}
+
+  /* Form */
+  .field{margin-bottom:16px;}
+  label{display:block;font-weight:600;margin-bottom:6px;font-size:0.92rem;}
+  input[type=text], input[type=number], input[type=date], select{
+    width:100%;
+    padding:12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size:1rem;
+    background:#fff;
+    color:var(--text);
+  }
+  .checkbox-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .checkbox-row input{width:20px;height:20px;}
+  .checkbox-row label{margin:0;font-weight:500;}
+
+  .photo-input-wrap{
+    display:flex;
+    gap:10px;
+  }
+  .photo-input-wrap label.upload-btn{
+    flex:1;
+    padding:12px;
+    border:1px dashed var(--border);
+    border-radius:8px;
+    text-align:center;
+    cursor:pointer;
+    font-weight:600;
+    color:var(--brown);
+    background:#fff;
+  }
+  #photoPreview{
+    margin-top:10px;
+    max-width:100%;
+    max-height:200px;
+    border-radius:8px;
+    display:none;
+  }
+
+  .submit-btn{
+    width:100%;
+    padding:16px;
+    font-size:1.05rem;
+    font-weight:700;
+    color:#fff;
+    background:var(--accent);
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    margin-top:8px;
+  }
+  .submit-btn:disabled{opacity:0.6;}
+
+  /* Toggle */
+  .toggle-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .toggle-row button{
+    flex:1;
+    padding:10px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:#fff;
+    font-weight:600;
+    cursor:pointer;
+    color:var(--brown);
+  }
+  .toggle-row button.active{
+    background:var(--brown);
+    color:#fff;
+    border-color:var(--brown);
+  }
+
+  /* Group headings */
+  .group-heading{
+    font-weight:700;
+    font-size:1rem;
+    margin:20px 0 10px;
+    color:var(--brown);
+    border-bottom:2px solid var(--border);
+    padding-bottom:4px;
+  }
+
+  /* Grid view */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:14px;
+  }
+  .grid-item{cursor:pointer;}
+  .grid-item img, .grid-item .noimg{
+    width:100%;
+    aspect-ratio:1/1;
+    object-fit:cover;
+    border-radius:10px;
+    background:var(--tan);
+  }
+  .grid-item .noimg{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--brown);
+    font-size:0.85rem;
+    text-align:center;
+    padding:8px;
+  }
+  .grid-item .meta{
+    font-size:0.8rem;
+    margin-top:6px;
+    line-height:1.3;
+  }
+  .grid-item .meta .b{font-weight:700;}
+
+  /* List view */
+  .list-item{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    padding:10px 0;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+  }
+  .list-item img, .list-item .noimg{
+    width:60px;
+    height:60px;
+    object-fit:cover;
+    border-radius:8px;
+    flex-shrink:0;
+    background:var(--tan);
+  }
+  .list-item .noimg{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:0.6rem;
+    text-align:center;
+    color:var(--brown);
+  }
+  .list-item .meta{font-size:0.85rem;line-height:1.4;}
+  .list-item .meta .b{font-weight:700;}
+
+  /* Modal */
+  .modal-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.55);
+    z-index:100;
+    align-items:flex-end;
+    justify-content:center;
+  }
+  .modal-overlay.active{display:flex;}
+  .modal{
+    background:#fff;
+    width:100%;
+    max-width:600px;
+    max-height:90vh;
+    overflow-y:auto;
+    border-radius:16px 16px 0 0;
+    padding:20px;
+  }
+  .modal img{
+    width:100%;
+    border-radius:10px;
+    margin-bottom:14px;
+  }
+  .modal-close{
+    display:block;
+    margin:16px auto 0;
+    padding:10px 24px;
+    border:none;
+    border-radius:8px;
+    background:var(--brown);
+    color:#fff;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .detail-row{
+    display:flex;
+    justify-content:space-between;
+    padding:8px 0;
+    border-bottom:1px solid var(--border);
+    font-size:0.95rem;
+  }
+  .detail-row .label{font-weight:600;color:var(--brown);}
+
+  .empty-msg{
+    text-align:center;
+    color:#9a8b7a;
+    padding:40px 20px;
+    font-style:italic;
+  }
+  .status-msg{
+    text-align:center;
+    padding:14px;
+    font-weight:600;
+    color:var(--brown);
+  }
+  .signin-wrap{
+    text-align:center;
+    padding-top:60px;
+  }
+  .signin-wrap p{color:#7a6c5d;margin-bottom:20px;}
+  #signinBtn{
+    display:inline-block;
+  }
+  .config-warning{
+    background:#fff3cd;
+    border:1px solid #ffe69c;
+    color:#664d03;
+    padding:12px;
+    border-radius:8px;
+    font-size:0.85rem;
+    margin-bottom:16px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="back" id="backBtn" style="visibility:hidden;">&larr; Back</button>
+  <h1 id="headerTitle">Puzzle Tracker</h1>
+  <button class="back" id="signOutBtn" style="visibility:hidden;">Sign out</button>
+</header>
+
+<main>
+
+  <!-- SIGN IN -->
+  <div class="screen active" id="screen-signin">
+    <div class="signin-wrap">
+      <p>Sign in with Google to access your puzzle tracker.</p>
+      <div id="signinBtn"></div>
+      <div id="configWarning"></div>
+    </div>
+  </div>
+
+  <!-- HOME -->
+  <div class="screen" id="screen-home">
+    <button class="big-btn" id="btnTrack">📋 Track a Puzzle</button>
+    <button class="big-btn secondary" id="btnView">🧩 View Tracked Puzzles</button>
+  </div>
+
+  <!-- TRACK FORM -->
+  <div class="screen" id="screen-track">
+    <form id="trackForm">
+      <div class="field">
+        <label for="f-date">Date Completed</label>
+        <input type="date" id="f-date" required>
+      </div>
+      <div class="field">
+        <label for="f-brand">Puzzle Brand</label>
+        <input type="text" id="f-brand" placeholder="e.g. Ravensburger" required>
+      </div>
+      <div class="field">
+        <label for="f-title">Puzzle Title</label>
+        <input type="text" id="f-title" placeholder="e.g. Venice at Dusk" required>
+      </div>
+      <div class="field">
+        <label for="f-artist">Puzzle Artist</label>
+        <input type="text" id="f-artist" placeholder="e.g. Jane Smith">
+      </div>
+      <div class="field">
+        <label for="f-pieces">Piece Count</label>
+        <input type="number" id="f-pieces" placeholder="e.g. 1000" min="1" required>
+      </div>
+      <div class="field">
+        <div class="checkbox-row">
+          <input type="checkbox" id="f-wooden">
+          <label for="f-wooden">Wooden puzzle</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="f-notcompleted">
+          <label for="f-notcompleted">Did not complete</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Photo</label>
+        <div class="photo-input-wrap">
+          <label class="upload-btn">
+            📷 Take / choose photo
+            <input type="file" id="f-photo" accept="image/*" capture="environment" style="display:none;">
+          </label>
+        </div>
+        <img id="photoPreview" alt="preview">
+      </div>
+      <button type="submit" class="submit-btn" id="saveBtn">Save Puzzle</button>
+      <div class="status-msg" id="trackStatus"></div>
+    </form>
+  </div>
+
+  <!-- VIEW: choose grouping -->
+  <div class="screen" id="screen-view-options">
+    <button class="option-btn" data-group="pieces">By Piece Count</button>
+    <button class="option-btn" data-group="brand">By Brand</button>
+    <button class="option-btn" data-group="yearmonth">By Year and Month</button>
+  </div>
+
+  <!-- VIEW: results -->
+  <div class="screen" id="screen-view-results">
+    <div class="toggle-row">
+      <button id="toggleGrid" class="active">Grid</button>
+      <button id="toggleList">List</button>
+    </div>
+    <div id="resultsContainer"></div>
+  </div>
+
+</main>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <img id="modalImg" alt="">
+    <div id="modalNoImg" class="noimg" style="display:none;height:200px;align-items:center;justify-content:center;border-radius:10px;margin-bottom:14px;background:var(--tan);">No photo</div>
+    <div class="detail-row"><span class="label">Date Completed</span><span id="modalDate"></span></div>
+    <div class="detail-row"><span class="label">Brand</span><span id="modalBrand"></span></div>
+    <div class="detail-row"><span class="label">Title</span><span id="modalTitle"></span></div>
+    <div class="detail-row"><span class="label">Artist</span><span id="modalArtist"></span></div>
+    <div class="detail-row"><span class="label">Piece Count</span><span id="modalPieces"></span></div>
+    <div class="detail-row"><span class="label">Wooden</span><span id="modalWooden"></span></div>
+    <div class="detail-row"><span class="label">Completed</span><span id="modalCompleted"></span></div>
+    <button class="modal-close" id="modalClose">Close</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
