@@ -8,9 +8,17 @@ let tokenClient;
 let accessToken = null;
 let gapiInited = false;
 let allPuzzles = []; // cached rows from sheet
+let currentGroups = []; // groups computed for the current grouping
 let currentGroupKey = null; // 'pieces' | 'brand' | 'yearmonth'
+let currentGroupValue = null; // selected category label, e.g. "1000 pieces"
 let currentViewMode = "grid"; // 'grid' | 'list'
 let navStack = ["screen-home"];
+
+const GROUP_TITLES = {
+  pieces: "Piece Count",
+  brand: "Brand",
+  yearmonth: "Year and Month"
+};
 
 // ---------- Google API loading ----------
 
@@ -104,6 +112,7 @@ function showScreen(id, pushHistory = true) {
     "screen-home": "Puzzle Tracker",
     "screen-track": "Track a Puzzle",
     "screen-view-options": "View Tracked Puzzles",
+    "screen-view-categories": "View Tracked Puzzles",
     "screen-view-results": "Tracked Puzzles"
   };
   document.getElementById("headerTitle").textContent = titles[id] || "Puzzle Tracker";
@@ -120,6 +129,11 @@ document.getElementById("backBtn").addEventListener("click", () => {
     navStack.pop();
     const prev = navStack[navStack.length - 1];
     showScreen(prev, false);
+    if (prev === "screen-view-categories") {
+      document.getElementById("headerTitle").textContent = GROUP_TITLES[currentGroupKey] || "View Tracked Puzzles";
+    } else if (prev === "screen-view-results") {
+      document.getElementById("headerTitle").textContent = currentGroupValue || "Tracked Puzzles";
+    }
   }
 });
 
@@ -135,9 +149,20 @@ document.getElementById("btnView").addEventListener("click", () => {
 document.querySelectorAll(".option-btn[data-group]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     currentGroupKey = btn.dataset.group;
-    showScreen("screen-view-results");
-    await loadAndRenderResults();
+    currentGroupValue = null;
+    showScreen("screen-view-categories");
+    document.getElementById("headerTitle").textContent = GROUP_TITLES[currentGroupKey] || "View Tracked Puzzles";
+    await loadAndRenderCategories();
   });
+});
+
+document.getElementById("categoriesContainer").addEventListener("click", (e) => {
+  const btn = e.target.closest(".option-btn[data-category]");
+  if (!btn) return;
+  currentGroupValue = btn.dataset.category;
+  showScreen("screen-view-results");
+  document.getElementById("headerTitle").textContent = currentGroupValue;
+  renderResults();
 });
 
 document.getElementById("toggleGrid").addEventListener("click", () => {
@@ -291,16 +316,36 @@ async function fetchAllPuzzles() {
 
 // ---------- Results rendering ----------
 
-async function loadAndRenderResults() {
-  const container = document.getElementById("resultsContainer");
+async function loadAndRenderCategories() {
+  const container = document.getElementById("categoriesContainer");
   container.innerHTML = '<div class="status-msg">Loading...</div>';
   try {
     allPuzzles = await fetchAllPuzzles();
-    renderResults();
+    renderCategories();
   } catch (err) {
     console.error(err);
     container.innerHTML = '<div class="status-msg">Error loading puzzles.</div>';
   }
+}
+
+function renderCategories() {
+  const container = document.getElementById("categoriesContainer");
+  container.innerHTML = "";
+
+  if (!allPuzzles.length) {
+    container.innerHTML = '<div class="empty-msg">No puzzles tracked yet.</div>';
+    return;
+  }
+
+  currentGroups = groupPuzzles(allPuzzles, currentGroupKey);
+
+  currentGroups.forEach((group) => {
+    const btn = document.createElement("button");
+    btn.className = "option-btn";
+    btn.dataset.category = group.label;
+    btn.textContent = `${group.label} (${group.items.length})`;
+    container.appendChild(btn);
+  });
 }
 
 function groupPuzzles(puzzles, key) {
@@ -365,48 +410,42 @@ function renderResults() {
   const container = document.getElementById("resultsContainer");
   container.innerHTML = "";
 
-  if (!allPuzzles.length) {
-    container.innerHTML = '<div class="empty-msg">No puzzles tracked yet.</div>';
+  const group = currentGroups.find((g) => g.label === currentGroupValue);
+  const items = group ? group.items : [];
+
+  if (!items.length) {
+    container.innerHTML = '<div class="empty-msg">No puzzles in this category.</div>';
     return;
   }
 
-  const groups = groupPuzzles(allPuzzles, currentGroupKey);
+  const wrap = document.createElement("div");
+  wrap.className = currentViewMode === "grid" ? "grid" : "";
 
-  groups.forEach((group) => {
-    const heading = document.createElement("div");
-    heading.className = "group-heading";
-    heading.textContent = group.label;
-    container.appendChild(heading);
+  items.forEach((p) => {
+    const item = document.createElement("div");
+    item.className = currentViewMode === "grid" ? "grid-item" : "list-item";
 
-    const wrap = document.createElement("div");
-    wrap.className = currentViewMode === "grid" ? "grid" : "";
+    const imgUrl = driveImageUrl(p.imageFileId, currentViewMode === "grid" ? 400 : 100);
+    let imgHtml;
+    if (imgUrl) {
+      imgHtml = `<img src="${imgUrl}" alt="${escapeHtml(p.title)}" loading="lazy">`;
+    } else {
+      imgHtml = `<div class="noimg">No photo</div>`;
+    }
 
-    group.items.forEach((p) => {
-      const item = document.createElement("div");
-      item.className = currentViewMode === "grid" ? "grid-item" : "list-item";
+    const metaHtml = `
+      <div class="meta">
+        <div>${escapeHtml(p.date)}</div>
+        <div class="b">${escapeHtml(p.brand)}</div>
+        <div>${escapeHtml(p.pieces)} pieces</div>
+      </div>`;
 
-      const imgUrl = driveImageUrl(p.imageFileId, currentViewMode === "grid" ? 400 : 100);
-      let imgHtml;
-      if (imgUrl) {
-        imgHtml = `<img src="${imgUrl}" alt="${escapeHtml(p.title)}" loading="lazy">`;
-      } else {
-        imgHtml = `<div class="noimg">No photo</div>`;
-      }
-
-      const metaHtml = `
-        <div class="meta">
-          <div>${escapeHtml(p.date)}</div>
-          <div class="b">${escapeHtml(p.brand)}</div>
-          <div>${escapeHtml(p.pieces)} pieces</div>
-        </div>`;
-
-      item.innerHTML = imgHtml + metaHtml;
-      item.addEventListener("click", () => openModal(p));
-      wrap.appendChild(item);
-    });
-
-    container.appendChild(wrap);
+    item.innerHTML = imgHtml + metaHtml;
+    item.addEventListener("click", () => openModal(p));
+    wrap.appendChild(item);
   });
+
+  container.appendChild(wrap);
 }
 
 function escapeHtml(str) {
