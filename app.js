@@ -15,6 +15,7 @@ let currentGroups = []; // groups computed for the current grouping
 let currentGroupKey = null; // 'pieces' | 'brand' | 'yearmonth'
 let currentGroupValue = null; // selected category label, e.g. "1000 pieces"
 let currentViewMode = "grid"; // 'grid' | 'list'
+let currentSortOrder = "desc"; // 'asc' | 'desc' (date order within a category)
 let navStack = ["screen-home"];
 let isOwner = false;
 let editingPuzzle = null; // puzzle object being edited, or null when adding new
@@ -295,6 +296,7 @@ document.querySelectorAll(".option-btn[data-group]").forEach((btn) => {
       currentGroupValue = "All Tracked Puzzles";
       showScreen("screen-view-results");
       document.getElementById("headerTitle").textContent = currentGroupValue;
+      document.getElementById("sortRow").style.display = "none";
       await loadAndRenderAll();
       return;
     }
@@ -312,7 +314,9 @@ document.getElementById("categoriesContainer").addEventListener("click", (e) => 
   currentGroupValue = btn.dataset.category;
   showScreen("screen-view-results");
   document.getElementById("headerTitle").textContent = currentGroupValue;
-  renderResults();
+  currentSortOrder = "desc";
+  document.getElementById("sortRow").style.display = currentGroupKey === "year" ? "flex" : "none";
+  setSortOrder("desc");
 });
 
 document.getElementById("toggleGrid").addEventListener("click", () => {
@@ -322,10 +326,24 @@ document.getElementById("toggleList").addEventListener("click", () => {
   setViewMode("list");
 });
 
+document.getElementById("sortDesc").addEventListener("click", () => {
+  setSortOrder("desc");
+});
+document.getElementById("sortAsc").addEventListener("click", () => {
+  setSortOrder("asc");
+});
+
 function setViewMode(mode) {
   currentViewMode = mode;
   document.getElementById("toggleGrid").classList.toggle("active", mode === "grid");
   document.getElementById("toggleList").classList.toggle("active", mode === "list");
+  renderResults();
+}
+
+function setSortOrder(order) {
+  currentSortOrder = order;
+  document.getElementById("sortDesc").classList.toggle("active", order === "desc");
+  document.getElementById("sortAsc").classList.toggle("active", order === "asc");
   renderResults();
 }
 
@@ -655,7 +673,15 @@ function renderResults() {
   container.innerHTML = "";
 
   const group = currentGroups.find((g) => g.label === currentGroupValue);
-  const items = group ? group.items : [];
+  let items = group ? group.items : [];
+
+  if (currentGroupKey === "year") {
+    items = [...items].sort((a, b) => {
+      if (a.date < b.date) return currentSortOrder === "asc" ? -1 : 1;
+      if (a.date > b.date) return currentSortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+  }
 
   if (!items.length) {
     container.innerHTML = '<div class="empty-msg">No puzzles in this category.</div>';
