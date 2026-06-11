@@ -508,12 +508,32 @@ function renderCategories() {
   });
 }
 
+const PIECE_RANGES = [
+  { min: 0, max: 99, label: "0-99" },
+  { min: 100, max: 299, label: "100-299" },
+  { min: 300, max: 499, label: "300-499" },
+  { min: 500, max: 749, label: "500-749" },
+  { min: 750, max: 999, label: "750-999" },
+  { min: 1000, max: 1499, label: "1000-1499" },
+  { min: 1500, max: Infinity, label: "1500+" }
+];
+
+function pieceRangeFor(pieces) {
+  const n = parseInt(pieces, 10);
+  if (isNaN(n)) return null;
+  for (const r of PIECE_RANGES) {
+    if (n >= r.min && n <= r.max) return r;
+  }
+  return null;
+}
+
 function groupPuzzles(puzzles, key) {
   const groups = {};
   puzzles.forEach((p) => {
     let groupName;
     if (key === "pieces") {
-      groupName = p.pieces ? `${p.pieces} pieces` : "Unknown piece count";
+      const range = pieceRangeFor(p.pieces);
+      groupName = range ? { sortKey: range.min, label: range.label } : { sortKey: -1, label: "Unknown piece count" };
     } else if (key === "brand") {
       groupName = p.brand || "Unknown brand";
     } else {
@@ -547,11 +567,7 @@ function groupPuzzles(puzzles, key) {
   let groupArr = Object.values(groups);
 
   if (key === "pieces") {
-    groupArr.sort((a, b) => {
-      const an = parseInt(a.label) || -1;
-      const bn = parseInt(b.label) || -1;
-      return bn - an;
-    });
+    groupArr.sort((a, b) => b.sortKey - a.sortKey); // largest piece counts first
   } else if (key === "brand") {
     groupArr.sort((a, b) => a.label.localeCompare(b.label));
   } else {
