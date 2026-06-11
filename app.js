@@ -149,6 +149,15 @@ document.getElementById("btnView").addEventListener("click", () => {
 document.querySelectorAll(".option-btn[data-group]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     currentGroupKey = btn.dataset.group;
+
+    if (currentGroupKey === "all") {
+      currentGroupValue = "All Tracked Puzzles";
+      showScreen("screen-view-results");
+      document.getElementById("headerTitle").textContent = currentGroupValue;
+      await loadAndRenderAll();
+      return;
+    }
+
     currentGroupValue = null;
     showScreen("screen-view-categories");
     document.getElementById("headerTitle").textContent = GROUP_TITLES[currentGroupKey] || "View Tracked Puzzles";
@@ -315,6 +324,20 @@ async function fetchAllPuzzles() {
 }
 
 // ---------- Results rendering ----------
+
+async function loadAndRenderAll() {
+  const container = document.getElementById("resultsContainer");
+  container.innerHTML = '<div class="status-msg">Loading...</div>';
+  try {
+    allPuzzles = await fetchAllPuzzles();
+    const items = [...allPuzzles].sort((a, b) => (a.date < b.date ? 1 : -1));
+    currentGroups = [{ label: "All Tracked Puzzles", items }];
+    renderResults();
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = '<div class="status-msg">Error loading puzzles.</div>';
+  }
+}
 
 async function loadAndRenderCategories() {
   const container = document.getElementById("categoriesContainer");
