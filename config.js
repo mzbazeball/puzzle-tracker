@@ -17,5 +17,5 @@ const CONFIG = {
   // API key (Google Cloud Console -> Credentials -> Create Credentials -> API key)
   // Used so anyone with the link can VIEW the puzzle list without signing in.
   // Restrict this key to the Sheets API + your site's URL (see SETUP_INSTRUCTIONS.md).
-  API_KEY: "YOUR_API_KEY"
+  API_KEY: "AIzaSyDYjg2dFbjjXlvlB_-SC-iUswcVCwNaDGU"
 };
