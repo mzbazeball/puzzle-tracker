@@ -170,8 +170,9 @@ async function initGoogle() {
     return;
   }
 
-  // Otherwise try silent sign-in (works if user previously granted access this session/browser)
-  tokenClient.requestAccessToken({ prompt: "" });
+  // No cached token: stay on the public home screen. Owner can tap
+  // "Owner sign in" to authenticate; we don't force a sign-in prompt
+  // for anonymous viewers.
 }
 
 function renderSignInButton() {
@@ -187,6 +188,7 @@ function renderSignInButton() {
 
 async function onSignedIn() {
   document.getElementById("signOutBtn").style.visibility = "visible";
+  navStack = ["screen-home"];
   showScreen("screen-home", false);
   await applyAccessControls();
 }
@@ -194,6 +196,7 @@ async function onSignedIn() {
 async function applyAccessControls() {
   const trackBtn = document.getElementById("btnTrack");
   const bulkBtn = document.getElementById("btnBulkPhotos");
+  const ownerSignInBtn = document.getElementById("btnOwnerSignIn");
   try {
     const resp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: "Bearer " + accessToken }
@@ -202,12 +205,14 @@ async function applyAccessControls() {
     isOwner = !!(data.email && data.email.toLowerCase() === OWNER_EMAIL.toLowerCase());
     trackBtn.style.display = isOwner ? "" : "none";
     bulkBtn.style.display = isOwner ? "" : "none";
+    ownerSignInBtn.style.display = isOwner ? "none" : "";
   } catch (err) {
     console.error("Could not verify account email", err);
     // Fail safe: hide owner-only buttons if we can't confirm the account
     isOwner = false;
     trackBtn.style.display = "none";
     bulkBtn.style.display = "none";
+    ownerSignInBtn.style.display = "";
   }
 }
 
@@ -218,10 +223,18 @@ document.getElementById("signOutBtn").addEventListener("click", () => {
   accessToken = null;
   gapi.client.setToken(null);
   clearStoredToken();
+  isOwner = false;
   document.getElementById("signOutBtn").style.visibility = "hidden";
+  document.getElementById("btnTrack").style.display = "none";
+  document.getElementById("btnBulkPhotos").style.display = "none";
+  document.getElementById("btnOwnerSignIn").style.display = "";
   navStack = ["screen-home"];
-  showScreen("screen-signin", false);
+  showScreen("screen-home", false);
   renderSignInButton();
+});
+
+document.getElementById("btnOwnerSignIn").addEventListener("click", () => {
+  showScreen("screen-signin");
 });
 
 // ---------- Navigation ----------
@@ -242,7 +255,7 @@ function showScreen(id, pushHistory = true) {
   };
   document.getElementById("headerTitle").textContent = titles[id] || "Puzzle Tracker";
 
-  document.getElementById("backBtn").style.visibility = id === "screen-home" || id === "screen-signin" ? "hidden" : "visible";
+  document.getElementById("backBtn").style.visibility = id === "screen-home" ? "hidden" : "visible";
 
   if (pushHistory) {
     navStack.push(id);
@@ -521,12 +534,30 @@ async function deletePhotoFromDrive(fileId) {
 }
 
 async function fetchAllPuzzles() {
-  await ensureFreshToken();
-  const resp = await gapi.client.sheets.spreadsheets.values.get({
-    spreadsheetId: CONFIG.SPREADSHEET_ID,
-    range: SHEET_RANGE_READ
-  });
-  const rows = resp.result.values || [];
+  let rows;
+  if (accessToken) {
+    // Signed-in (owner) path: use OAuth-authenticated Sheets API
+    await ensureFreshToken();
+    const resp = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: CONFIG.SPREADSHEET_ID,
+      range: SHEET_RANGE_READ
+    });
+    rows = resp.result.values || [];
+  } else {
+    // Anonymous viewer path: public read via API key (no sign-in required).
+    // Requires the Sheet to be shared "Anyone with the link - Viewer" and
+    // a Sheets API key restricted to this site (see SETUP_INSTRUCTIONS.md).
+    if (!CONFIG.API_KEY || CONFIG.API_KEY.startsWith("YOUR_")) {
+      throw new Error("Public viewing is not configured yet (missing API_KEY in config.js).");
+    }
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_RANGE_READ)}?key=${CONFIG.API_KEY}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      throw new Error("Could not load puzzles (" + resp.status + ")");
+    }
+    const data = await resp.json();
+    rows = data.values || [];
+  }
   return rows
     .map((r, idx) => ({ r, rowNumber: idx + 2 }))
     .filter(({ r }) => r.length > 0 && r[0])

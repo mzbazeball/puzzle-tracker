@@ -12,5 +12,10 @@ const CONFIG = {
 
   // The ID of the Google Drive folder where puzzle photos will be stored
   // (the long string at the end of the folder's URL)
-  DRIVE_FOLDER_ID: "1SuFEyaUuKeDxnUYBKRqA2a3pt91p3hro"
+  DRIVE_FOLDER_ID: "1SuFEyaUuKeDxnUYBKRqA2a3pt91p3hro",
+
+  // API key (Google Cloud Console -> Credentials -> Create Credentials -> API key)
+  // Used so anyone with the link can VIEW the puzzle list without signing in.
+  // Restrict this key to the Sheets API + your site's URL (see SETUP_INSTRUCTIONS.md).
+  API_KEY: "YOUR_API_KEY"
 };

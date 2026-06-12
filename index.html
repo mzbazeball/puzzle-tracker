@@ -321,20 +321,21 @@
 
 <main>
 
-  <!-- SIGN IN -->
-  <div class="screen active" id="screen-signin">
+  <!-- SIGN IN (owner only) -->
+  <div class="screen" id="screen-signin">
     <div class="signin-wrap">
-      <p>Sign in with Google to access your puzzle tracker.</p>
+      <p>Sign in with Google to manage this puzzle tracker (add puzzles, edit, bulk add photos).</p>
       <div id="signinBtn"></div>
       <div id="configWarning"></div>
     </div>
   </div>
 
   <!-- HOME -->
-  <div class="screen" id="screen-home">
-    <button class="big-btn" id="btnTrack">📋 Track a Puzzle</button>
+  <div class="screen active" id="screen-home">
+    <button class="big-btn" id="btnTrack" style="display:none;">📋 Track a Puzzle</button>
     <button class="big-btn secondary" id="btnView">🧩 View Tracked Puzzles</button>
-    <button class="big-btn" id="btnBulkPhotos" style="background:var(--accent);">🖼️ Bulk Add Photos</button>
+    <button class="big-btn" id="btnBulkPhotos" style="background:var(--accent);display:none;">🖼️ Bulk Add Photos</button>
+    <button class="option-btn" id="btnOwnerSignIn" style="margin-top:30px;text-align:center;">🔑 Owner sign in</button>
   </div>
 
   <!-- TRACK FORM -->
