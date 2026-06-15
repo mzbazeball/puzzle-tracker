@@ -726,10 +726,19 @@ function groupPuzzles(puzzles, key) {
 
 function renderResults() {
   const container = document.getElementById("resultsContainer");
+  const countEl = document.getElementById("resultsCount");
   container.innerHTML = "";
 
   const group = currentGroups.find((g) => g.label === currentGroupValue);
   let items = group ? group.items : [];
+
+  // Show total count banner only on "View All" screen
+  if (currentGroupKey === "all" && items.length) {
+    countEl.textContent = `${items.length} puzzle${items.length === 1 ? "" : "s"} tracked`;
+    countEl.style.display = "";
+  } else {
+    countEl.style.display = "none";
+  }
 
   if (currentGroupKey === "year") {
     items = [...items].sort((a, b) => {
@@ -807,6 +816,7 @@ function openModal(p) {
   document.getElementById("modalCompleted").textContent = p.notCompleted ? "No" : "Yes";
 
   document.getElementById("modalEdit").style.display = isOwner ? "" : "none";
+  document.getElementById("modalDelete").style.display = isOwner ? "" : "none";
 
   document.getElementById("modalOverlay").classList.add("active");
 }
@@ -824,6 +834,61 @@ document.getElementById("modalEdit").addEventListener("click", () => {
   if (!currentModalPuzzle) return;
   startEditPuzzle(currentModalPuzzle);
   document.getElementById("modalOverlay").classList.remove("active");
+});
+
+async function deletePuzzleRow(rowNumber) {
+  await ensureFreshToken();
+  // Fetch sheetId (numeric) for the first sheet
+  const meta = await gapi.client.sheets.spreadsheets.get({
+    spreadsheetId: CONFIG.SPREADSHEET_ID,
+    fields: "sheets.properties"
+  });
+  const sheetId = meta.result.sheets[0].properties.sheetId;
+  await gapi.client.sheets.spreadsheets.batchUpdate({
+    spreadsheetId: CONFIG.SPREADSHEET_ID,
+    resource: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: "ROWS",
+            startIndex: rowNumber - 1, // 0-indexed
+            endIndex: rowNumber
+          }
+        }
+      }]
+    }
+  });
+}
+
+document.getElementById("modalDelete").addEventListener("click", async () => {
+  if (!currentModalPuzzle) return;
+  const p = currentModalPuzzle;
+  const label = [p.brand, p.title, p.date].filter(Boolean).join(" — ");
+  if (!confirm(`Delete "${label}"?\n\nThis cannot be undone.`)) return;
+
+  document.getElementById("modalOverlay").classList.remove("active");
+
+  try {
+    // Delete photo from Drive first (best-effort)
+    if (p.imageFileId) {
+      await deletePhotoFromDrive(p.imageFileId);
+    }
+    // Delete the Sheet row
+    await deletePuzzleRow(p.rowNumber);
+    // Remove from local cache and re-render
+    allPuzzles = allPuzzles.filter((x) => x.rowNumber !== p.rowNumber);
+    // Adjust rowNumbers for rows that shifted up
+    allPuzzles.forEach((x) => { if (x.rowNumber > p.rowNumber) x.rowNumber--; });
+    currentGroups = currentGroups.map((g) => ({
+      ...g,
+      items: g.items.filter((x) => x.rowNumber !== p.rowNumber)
+    }));
+    renderResults();
+  } catch (err) {
+    console.error(err);
+    alert("Error deleting puzzle. Please try again.");
+  }
 });
 
 function startEditPuzzle(p) {

@@ -280,6 +280,16 @@
   }
   .detail-row .label{font-weight:600;color:var(--brown);}
 
+  .results-count{
+    text-align:center;
+    font-size:0.95rem;
+    color:var(--brown);
+    font-weight:600;
+    margin-bottom:14px;
+    padding:8px 14px;
+    background:var(--tan);
+    border-radius:8px;
+  }
   .empty-msg{
     text-align:center;
     color:#9a8b7a;
@@ -416,6 +426,7 @@
       <button id="sortDesc" class="active">Sort Descending</button>
       <button id="sortAsc">Sort Ascending</button>
     </div>
+    <div id="resultsCount" style="display:none;"></div>
     <div id="resultsContainer"></div>
   </div>
 
@@ -454,8 +465,11 @@
     <div class="detail-row"><span class="label">Piece Count</span><span id="modalPieces"></span></div>
     <div class="detail-row"><span class="label">Wooden</span><span id="modalWooden"></span></div>
     <div class="detail-row"><span class="label">Completed</span><span id="modalCompleted"></span></div>
-    <button class="modal-close" id="modalEdit" style="background:var(--accent);">Edit</button>
-    <button class="modal-close" id="modalClose">Close</button>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="modal-close" id="modalEdit" style="background:var(--accent);flex:1;margin:0;">Edit</button>
+      <button class="modal-close" id="modalDelete" style="background:#c0392b;flex:1;margin:0;">Delete</button>
+    </div>
+    <button class="modal-close" id="modalClose" style="margin-top:10px;">Close</button>
   </div>
 </div>
 
