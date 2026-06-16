@@ -337,7 +337,8 @@ function showScreen(id, pushHistory = true) {
     "screen-view-date-options": "View by Date",
     "screen-view-categories": "View Tracked Puzzles",
     "screen-view-results": "Tracked Puzzles",
-    "screen-bulk-photos": "Bulk Add Photos"
+    "screen-bulk-photos": "Bulk Add Photos",
+    "screen-search": "Search Puzzles"
   };
   document.getElementById("headerTitle").textContent = titles[id] || "Puzzle Tracker";
 
@@ -370,6 +371,26 @@ document.getElementById("btnTrack").addEventListener("click", () => {
 
 document.getElementById("btnView").addEventListener("click", () => {
   showScreen("screen-view-options");
+});
+
+document.getElementById("btnSearch").addEventListener("click", async () => {
+  showScreen("screen-search");
+  const input = document.getElementById("searchInput");
+  input.value = "";
+  document.getElementById("searchResults").innerHTML = "";
+  // Pre-load puzzles in the background so search feels instant
+  if (!allPuzzles.length) {
+    document.getElementById("searchResults").innerHTML = '<div class="status-msg">Loading…</div>';
+    try {
+      allPuzzles = await fetchAllPuzzles();
+    } catch(err) {
+      document.getElementById("searchResults").innerHTML = '<div class="status-msg">Error loading puzzles.</div>';
+      return;
+    }
+  }
+  document.getElementById("searchResults").innerHTML = '<div class="empty-msg">Start typing to search.</div>';
+  // Focus the input after a brief delay (needed on mobile)
+  setTimeout(() => input.focus(), 120);
 });
 
 document.getElementById("btnViewByDate").addEventListener("click", () => {
@@ -915,6 +936,57 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+
+// ---------- Search ----------
+
+document.getElementById("searchInput").addEventListener("input", (e) => {
+  const query = e.target.value.trim().toLowerCase();
+  const container = document.getElementById("searchResults");
+
+  if (!query) {
+    container.innerHTML = '<div class="empty-msg">Start typing to search.</div>';
+    return;
+  }
+
+  const matches = allPuzzles.filter((p) =>
+    (p.title  && p.title.toLowerCase().includes(query))  ||
+    (p.brand  && p.brand.toLowerCase().includes(query))  ||
+    (p.artist && p.artist.toLowerCase().includes(query))
+  );
+
+  if (!matches.length) {
+    container.innerHTML = '<div class="empty-msg">No puzzles found.</div>';
+    return;
+  }
+
+  // Sort by date descending
+  const sorted = [...matches].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  container.innerHTML = "";
+  const resultCount = document.createElement("div");
+  resultCount.className = "results-count";
+  resultCount.textContent = `${sorted.length} result${sorted.length === 1 ? "" : "s"}`;
+  container.appendChild(resultCount);
+
+  sorted.forEach((p) => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    const imgUrl = driveImageUrl(p.imageFileId, 100);
+    const imgHtml = imgUrl
+      ? `<img src="${imgUrl}" alt="" loading="lazy">`
+      : `<div class="noimg">No photo</div>`;
+    const sub = [p.artist, p.pieces ? p.pieces + " pieces" : ""].filter(Boolean).join(" · ");
+    item.innerHTML = `${imgHtml}
+      <div class="meta">
+        <div>${escapeHtml(p.date)}</div>
+        <div class="b">${escapeHtml(p.brand)}</div>
+        <div>${escapeHtml(p.title)}</div>
+        ${sub ? `<div style="color:#777;font-size:0.8rem;">${escapeHtml(sub)}</div>` : ""}
+      </div>`;
+    item.addEventListener("click", () => openModal(p));
+    container.appendChild(item);
+  });
+});
 
 // ---------- Modal ----------
 
