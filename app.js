@@ -190,9 +190,12 @@ function renderSignInButton() {
 
 async function onSignedIn() {
   document.getElementById("signOutBtn").style.visibility = "visible";
-  navStack = ["screen-home"];
-  showScreen("screen-home", false);
   await applyAccessControls();
+  const restored = await restoreSession();
+  if (!restored) {
+    navStack = ["screen-home"];
+    showScreen("screen-home", false);
+  }
 }
 
 async function applyAccessControls() {
@@ -225,6 +228,7 @@ document.getElementById("signOutBtn").addEventListener("click", () => {
   accessToken = null;
   gapi.client.setToken(null);
   clearStoredToken();
+  clearSession();
   isOwner = false;
   document.getElementById("signOutBtn").style.visibility = "hidden";
   document.getElementById("btnTrack").style.display = "none";
@@ -238,6 +242,86 @@ document.getElementById("signOutBtn").addEventListener("click", () => {
 document.getElementById("btnOwnerSignIn").addEventListener("click", () => {
   showScreen("screen-signin");
 });
+
+// ---------- Session persistence ----------
+
+const SESSION_KEY = "puzzleTrackerSession_v1";
+
+function saveSession() {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      screen: navStack[navStack.length - 1],
+      navStack,
+      currentGroupKey,
+      currentGroupValue,
+      currentViewMode,
+      currentSortOrder,
+      allSortKey,
+      allSortOrder
+    }));
+  } catch(e) {}
+}
+
+function clearSession() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch(e) {}
+}
+
+async function restoreSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    const screen = s.screen;
+    // Don't restore form or sign-in screens
+    if (!screen || ["screen-track","screen-bulk-photos","screen-signin","screen-home"].includes(screen)) return false;
+
+    // Restore state variables
+    navStack = s.navStack || ["screen-home", screen];
+    currentGroupKey = s.currentGroupKey || null;
+    currentGroupValue = s.currentGroupValue || null;
+    currentViewMode = s.currentViewMode || "grid";
+    currentSortOrder = s.currentSortOrder || "desc";
+    allSortKey = s.allSortKey || "date";
+    allSortOrder = s.allSortOrder || "desc";
+
+    setViewMode(currentViewMode);
+
+    if (screen === "screen-view-results") {
+      showScreen(screen, false);
+      document.getElementById("headerTitle").textContent = currentGroupValue || "Tracked Puzzles";
+      document.getElementById("sortRow").style.display = currentGroupKey === "year" ? "flex" : "none";
+      if (currentGroupKey === "all") {
+        document.getElementById("sortAllDateDesc").classList.toggle("active", allSortKey === "date" && allSortOrder === "desc");
+        document.getElementById("sortAllDateAsc").classList.toggle("active", allSortKey === "date" && allSortOrder === "asc");
+        document.getElementById("sortAllPiecesDesc").classList.toggle("active", allSortKey === "pieces" && allSortOrder === "desc");
+        document.getElementById("sortAllPiecesAsc").classList.toggle("active", allSortKey === "pieces" && allSortOrder === "asc");
+        await loadAndRenderAll();
+      } else if (currentGroupKey === "wooden") {
+        await loadAndRenderWooden();
+      } else {
+        allPuzzles = await fetchAllPuzzles();
+        currentGroups = groupPuzzles(allPuzzles, currentGroupKey);
+        renderResults();
+      }
+      return true;
+    }
+
+    if (screen === "screen-view-categories") {
+      showScreen(screen, false);
+      document.getElementById("headerTitle").textContent = GROUP_TITLES[currentGroupKey] || "View Tracked Puzzles";
+      await loadAndRenderCategories();
+      return true;
+    }
+
+    if (screen === "screen-view-options" || screen === "screen-view-date-options") {
+      showScreen(screen, false);
+      return true;
+    }
+  } catch(e) {
+    console.warn("Could not restore session", e);
+  }
+  return false;
+}
 
 // ---------- Navigation ----------
 
@@ -262,6 +346,8 @@ function showScreen(id, pushHistory = true) {
   if (pushHistory) {
     navStack.push(id);
   }
+
+  saveSession();
 }
 
 document.getElementById("backBtn").addEventListener("click", () => {
