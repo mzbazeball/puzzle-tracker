@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Puzzle Tracker — Remove Duplicates</title>
+<style>
+:root{--green:#6b8f71;--red:#c0392b;--text:#37463a;}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#faf9f3;color:var(--text);padding:20px;max-width:640px;}
+h1{color:var(--green);margin-top:0;font-size:1.3rem;}
+h2{color:var(--green);font-size:1.05rem;margin:0 0 8px;}
+.card{background:#fff;border:1px solid #d4ddd0;border-radius:12px;padding:20px;margin-bottom:20px;}
+button{padding:12px 20px;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;background:var(--green);color:#fff;}
+button:disabled{opacity:0.5;cursor:not-allowed;}
+.delbtn{background:var(--red);}
+.status{margin-top:12px;font-size:0.9rem;white-space:pre-wrap;line-height:1.5;}
+progress{width:100%;height:12px;border-radius:6px;margin-top:8px;accent-color:var(--green);}
+</style>
+</head>
+<body>
+<h1>🧩 Remove Duplicate Rows</h1>
+<p>Deletes <strong>353 duplicate rows</strong> added by the CSV import, keeping 20 genuinely new ones.</p>
+
+<div class="card">
+  <h2>Step 1: Sign in</h2>
+  <button id="btnSignin">Sign in with Google</button>
+  <div class="status" id="signinStatus">Initializing…</div>
+</div>
+
+<div class="card">
+  <h2>Step 2: Delete 353 duplicates</h2>
+  <button id="btnDelete" class="delbtn" disabled>Delete 353 duplicate rows</button>
+  <progress id="prog" value="0" max="353" style="display:none;"></progress>
+  <div class="status" id="deleteStatus"></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+// Sheet row numbers (1-indexed, including header row) to delete
+// Must delete bottom-to-top to avoid row number shifting
+const ROWS_TO_DELETE = [428, 429, 430, 431, 432, 433, 434, 435, 436, 437, 438, 439, 440, 441, 442, 443, 444, 445, 446, 447, 448, 449, 450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463, 464, 465, 466, 467, 468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 478, 479, 480, 481, 482, 483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 500, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 513, 515, 517, 518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 535, 536, 537, 538, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550, 551, 552, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571, 572, 573, 574, 575, 576, 577, 578, 579, 580, 581, 582, 583, 584, 585, 586, 587, 588, 589, 590, 591, 592, 593, 594, 595, 596, 597, 598, 599, 600, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 619, 620, 621, 622, 623, 625, 628, 629, 630, 631, 632, 633, 634, 635, 637, 638, 639, 640, 641, 642, 643, 644, 645, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656, 657, 658, 659, 660, 661, 662, 663, 664, 665, 666, 667, 668, 669, 670, 671, 672, 673, 674, 675, 676, 677, 678, 681, 682, 684, 685, 686, 687, 688, 689, 690, 691, 692, 693, 694, 695, 696, 697, 698, 699, 700, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 716, 717, 718, 719, 720, 721, 722, 723, 724, 725, 726, 727, 728, 729, 730, 731, 732, 733, 734, 735, 736, 737, 738, 739, 740, 741, 742, 743, 744, 745, 746, 747, 748, 749, 750, 751, 752, 753, 754, 755, 756, 757, 758, 759, 760, 761, 762, 763, 764, 765, 766, 767, 768, 769, 770, 771, 772, 773, 774, 775, 776, 777, 778, 779, 780, 781, 782, 783, 784, 785, 786, 787, 788, 789, 790, 791, 792, 793, 794, 795, 796, 797, 798, 799, 800, 801].sort((a,b) => b - a);
+let accessToken = null;
+let sheetId = null;
+
+function status(id, msg, color) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.color = color || "";
+}
+
+function initGIS() {
+  try {
+    const tc = google.accounts.oauth2.initTokenClient({
+      client_id: CONFIG.CLIENT_ID,
+      scope: "https://www.googleapis.com/auth/spreadsheets",
+      callback: function(resp) {
+        if (resp.error) { status("signinStatus", "Error: " + resp.error, "#c0392b"); return; }
+        accessToken = resp.access_token;
+        status("signinStatus", "✓ Signed in", "#6b8f71");
+        document.getElementById("btnDelete").disabled = false;
+      }
+    });
+    document.getElementById("btnSignin").onclick = () => tc.requestAccessToken({ prompt: "select_account" });
+    status("signinStatus", "Ready — click Sign in.");
+  } catch(e) {
+    status("signinStatus", "Init error: " + e.message, "#c0392b");
+  }
+}
+
+document.getElementById("btnDelete").onclick = async function() {
+  if (!confirm("Delete 353 duplicate rows? This cannot be undone.")) return;
+  this.disabled = true;
+  const prog = document.getElementById("prog");
+  prog.style.display = "";
+
+  try {
+    // Get sheetId
+    status("deleteStatus", "Getting sheet info…");
+    const meta = await fetch(
+      "https://sheets.googleapis.com/v4/spreadsheets/" + CONFIG.SPREADSHEET_ID,
+      { headers: { Authorization: "Bearer " + accessToken } }
+    ).then(r => r.json());
+    if (meta.error) throw new Error(meta.error.message);
+    sheetId = meta.sheets[0].properties.sheetId;
+
+    // Delete in batches of 50 (bottom-to-top, already sorted desc)
+    const BATCH = 50;
+    let deleted = 0;
+    for (let i = 0; i < ROWS_TO_DELETE.length; i += BATCH) {
+      const chunk = ROWS_TO_DELETE.slice(i, i + BATCH);
+      const requests = chunk.map(rowNum => ({
+        deleteDimension: {
+          range: {
+            sheetId: sheetId,
+            dimension: "ROWS",
+            startIndex: rowNum - 1,  // 0-indexed
+            endIndex: rowNum         // exclusive
+          }
+        }
+      }));
+      const resp = await fetch(
+        "https://sheets.googleapis.com/v4/spreadsheets/" + CONFIG.SPREADSHEET_ID + ":batchUpdate",
+        {
+          method: "POST",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ requests })
+        }
+      ).then(r => r.json());
+      if (resp.error) throw new Error(resp.error.message);
+      deleted += chunk.length;
+      prog.value = deleted;
+      status("deleteStatus", "Deleted " + deleted + " of 353 rows…");
+    }
+    status("deleteStatus", "✓ Done! 353 duplicates removed.", "#6b8f71");
+  } catch(e) {
+    status("deleteStatus", "Error: " + e.message, "#c0392b");
+    this.disabled = false;
+  }
+};
+</script>
+<script src="https://accounts.google.com/gsi/client" onload="initGIS()" onerror="status('signinStatus','Failed to load Google script.','#c0392b')"></script>
+</body>
+</html>
