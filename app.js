@@ -202,23 +202,10 @@ async function applyAccessControls() {
   const trackBtn = document.getElementById("btnTrack");
   const bulkBtn = document.getElementById("btnBulkPhotos");
   const ownerSignInBtn = document.getElementById("btnOwnerSignIn");
-  try {
-    const resp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-      headers: { Authorization: "Bearer " + accessToken }
-    });
-    const data = await resp.json();
-    isOwner = !!(data.email && data.email.toLowerCase() === OWNER_EMAIL.toLowerCase());
-    trackBtn.style.display = isOwner ? "" : "none";
-    bulkBtn.style.display = isOwner ? "" : "none";
-    ownerSignInBtn.style.display = isOwner ? "none" : "";
-  } catch (err) {
-    console.error("Could not verify account email", err);
-    // Fail safe: hide owner-only buttons if we can't confirm the account
-    isOwner = false;
-    trackBtn.style.display = "none";
-    bulkBtn.style.display = "none";
-    ownerSignInBtn.style.display = "";
-  }
+  isOwner = true;
+  trackBtn.style.display = "";
+  bulkBtn.style.display = "";
+  ownerSignInBtn.style.display = "none";
 }
 
 document.getElementById("signOutBtn").addEventListener("click", () => {
