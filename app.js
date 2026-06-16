@@ -16,6 +16,8 @@ let currentGroupKey = null; // 'pieces' | 'brand' | 'yearmonth'
 let currentGroupValue = null; // selected category label, e.g. "1000 pieces"
 let currentViewMode = "grid"; // 'grid' | 'list'
 let currentSortOrder = "desc"; // 'asc' | 'desc' (date order within a category)
+let allSortKey = "date";  // 'date' | 'pieces' (sort key for View All)
+let allSortOrder = "desc"; // 'asc' | 'desc' (sort order for View All)
 let navStack = ["screen-home"];
 let isOwner = false;
 let editingPuzzle = null; // puzzle object being edited, or null when adding new
@@ -307,6 +309,11 @@ document.querySelectorAll(".option-btn[data-group]").forEach((btn) => {
 
     if (currentGroupKey === "all") {
       currentGroupValue = "All Tracked Puzzles";
+      allSortKey = "date";
+      allSortOrder = "desc";
+      ["sortAllDateDesc","sortAllDateAsc","sortAllPiecesDesc","sortAllPiecesAsc"].forEach(id =>
+        document.getElementById(id).classList.remove("active"));
+      document.getElementById("sortAllDateDesc").classList.add("active");
       showScreen("screen-view-results");
       document.getElementById("headerTitle").textContent = currentGroupValue;
       document.getElementById("sortRow").style.display = "none";
@@ -354,6 +361,22 @@ document.getElementById("sortDesc").addEventListener("click", () => {
 document.getElementById("sortAsc").addEventListener("click", () => {
   setSortOrder("asc");
 });
+
+function setAllSort(key, order) {
+  allSortKey = key;
+  allSortOrder = order;
+  ["sortAllDateDesc","sortAllDateAsc","sortAllPiecesDesc","sortAllPiecesAsc"].forEach(id => {
+    document.getElementById(id).classList.remove("active");
+  });
+  const activeId = "sortAll" + (key === "date" ? "Date" : "Pieces") + (order === "desc" ? "Desc" : "Asc");
+  document.getElementById(activeId).classList.add("active");
+  renderResults();
+}
+
+document.getElementById("sortAllDateDesc").addEventListener("click", () => setAllSort("date", "desc"));
+document.getElementById("sortAllDateAsc").addEventListener("click",  () => setAllSort("date", "asc"));
+document.getElementById("sortAllPiecesDesc").addEventListener("click", () => setAllSort("pieces", "desc"));
+document.getElementById("sortAllPiecesAsc").addEventListener("click",  () => setAllSort("pieces", "asc"));
 
 function setViewMode(mode) {
   currentViewMode = mode;
@@ -732,11 +755,28 @@ function renderResults() {
   const group = currentGroups.find((g) => g.label === currentGroupValue);
   let items = group ? group.items : [];
 
-  // Show total count banner only on "View All" screen
+  // Show/hide sort row and count banner for "View All"
+  const allSortRow = document.getElementById("allSortRow");
   if (currentGroupKey === "all" && items.length) {
+    allSortRow.style.display = "";
     countEl.textContent = `${items.length} puzzle${items.length === 1 ? "" : "s"} tracked`;
     countEl.style.display = "";
+    // Apply all-view sort
+    items = [...items].sort((a, b) => {
+      if (allSortKey === "pieces") {
+        const pa = parseInt(a.pieces, 10);
+        const pb = parseInt(b.pieces, 10);
+        const na = isNaN(pa) ? (allSortOrder === "desc" ? -Infinity : Infinity) : pa;
+        const nb = isNaN(pb) ? (allSortOrder === "desc" ? -Infinity : Infinity) : pb;
+        return allSortOrder === "desc" ? nb - na : na - nb;
+      } else {
+        if (a.date < b.date) return allSortOrder === "desc" ? 1 : -1;
+        if (a.date > b.date) return allSortOrder === "desc" ? -1 : 1;
+        return 0;
+      }
+    });
   } else {
+    allSortRow.style.display = "none";
     countEl.style.display = "none";
   }
 

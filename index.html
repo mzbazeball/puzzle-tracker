@@ -166,6 +166,28 @@
     color:#fff;
     border-color:var(--brown);
   }
+  /* Sort row for View All */
+  .sort-all-row{
+    display:flex;
+    gap:6px;
+    margin-bottom:12px;
+    flex-wrap:wrap;
+  }
+  .sort-all-row button{
+    padding:6px 11px;
+    border:1px solid #a8c4e0;
+    border-radius:7px;
+    background:#fff;
+    font-size:0.8rem;
+    font-weight:600;
+    cursor:pointer;
+    color:#3a6e9e;
+  }
+  .sort-all-row button.active{
+    background:#5b9bd5;
+    color:#fff;
+    border-color:#5b9bd5;
+  }
 
   /* Group headings */
   .group-heading{
@@ -425,6 +447,12 @@
     <div class="toggle-row" id="sortRow" style="display:none;">
       <button id="sortDesc" class="active">Sort Descending</button>
       <button id="sortAsc">Sort Ascending</button>
+    </div>
+    <div class="sort-all-row" id="allSortRow" style="display:none;">
+      <button id="sortAllDateDesc" class="active">Date ↓</button>
+      <button id="sortAllDateAsc">Date ↑</button>
+      <button id="sortAllPiecesDesc">Pieces ↓</button>
+      <button id="sortAllPiecesAsc">Pieces ↑</button>
     </div>
     <div id="resultsCount" style="display:none;"></div>
     <div id="resultsContainer"></div>
