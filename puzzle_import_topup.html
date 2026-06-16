@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Puzzle Tracker — Export3 Top-up Import</title>
+<style>
+:root{--green:#6b8f71;--text:#37463a;--red:#c0392b;}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#faf9f3;color:var(--text);padding:20px;max-width:640px;}
+h1{color:var(--green);margin-top:0;font-size:1.3rem;}
+h2{color:var(--green);font-size:1.05rem;margin:0 0 8px;}
+.card{background:#fff;border:1px solid #d4ddd0;border-radius:12px;padding:20px;margin-bottom:20px;}
+button{padding:12px 20px;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;background:var(--green);color:#fff;}
+button:disabled{opacity:0.5;cursor:not-allowed;}
+.status{margin-top:12px;font-size:0.9rem;white-space:pre-wrap;line-height:1.5;}
+.ok{color:var(--green);font-weight:600;}
+.err{color:var(--red);font-weight:600;}
+progress{width:100%;height:12px;border-radius:6px;margin-top:8px;accent-color:var(--green);}
+.phase{opacity:0.4;pointer-events:none;}
+.phase.unlocked{opacity:1;pointer-events:auto;}
+.small{font-size:0.85rem;color:#666;margin-top:6px;line-height:1.4;}
+.folder-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.folder-badge{font-size:0.85rem;color:var(--green);font-weight:600;}
+code{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:0.85rem;}
+</style>
+</head>
+<body>
+<h1>🧩 Puzzle Tracker — 14-row Top-up Import</h1>
+<p>Imports 14 additional puzzles found in the third export folder (<code>instagram-innerpuzzlepiece-2026-06-11-dGFPHVTH</code>).</p>
+
+<div class="card" id="card-signin">
+  <h2>Step 1: Sign in as owner</h2>
+  <button id="btnSignin">Sign in with Google</button>
+  <div class="status" id="signinStatus"></div>
+</div>
+
+<div class="card phase" id="card-import">
+  <h2>Step 2: Import 14 rows (text only)</h2>
+  <button id="btnImport">Import 14 rows</button>
+  <progress id="importProgress" value="0" max="14" style="display:none;"></progress>
+  <div class="status" id="importStatus"></div>
+</div>
+
+<div class="card phase" id="card-photos">
+  <h2>Step 3: Upload photos</h2>
+  <p class="small">Select the third export folder — the one named <code>instagram-innerpuzzlepiece-2026-06-11-dGFPHVTH</code>.</p>
+  <div class="folder-row">
+    <button id="btnFolder">Select 3rd export folder</button>
+    <span class="folder-badge" id="folderName"></span>
+  </div>
+  <button id="btnUpload" style="margin-top:12px;" disabled>Upload 14 photos</button>
+  <progress id="uploadProgress" value="0" max="14" style="display:none;"></progress>
+  <div class="status" id="uploadStatus"></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+const ROWS = [{"date": "2023-07-29", "pieces": 500, "brand": "Mintyfizz Puzzles", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/18259003366085222.jpg"}, {"date": "2023-07-15", "pieces": 500, "brand": "Ravensburger", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/18003068014899002.jpg"}, {"date": "2023-07-14", "pieces": 1000, "brand": "Buffalo Games", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/18016608388638497.jpg"}, {"date": "2023-06-27", "pieces": 500, "brand": "Galison", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/18272769823121312.jpg"}, {"date": "2023-06-06", "pieces": 1000, "brand": null, "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/17907912899781548.jpg"}, {"date": "2023-04-10", "pieces": 500, "brand": "Ravensburger", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/18278911192191937.webp"}, {"date": "2023-03-27", "pieces": 150, "brand": null, "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/17910642356724367.webp"}, {"date": "2023-02-21", "pieces": 1000, "brand": "Disney", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/17863152230879664.webp"}, {"date": "2023-02-21", "pieces": 1000, "brand": "Puzzle Magnolia", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/18000809521625736.webp"}, {"date": "2023-02-21", "pieces": 150, "brand": "Misitu", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/17954898821406451.webp"}, {"date": "2023-02-21", "pieces": 1500, "brand": "Kodak", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/17958748169205961.webp"}, {"date": "2023-02-21", "pieces": 1000, "brand": "eeboo", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/17980066069951035.webp"}, {"date": "2023-02-21", "pieces": 550, "brand": "Great American Puzzle Company", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/18073887184317130.webp"}, {"date": "2023-02-21", "pieces": 500, "brand": "Ravensburger", "title": null, "artist": null, "wooden": false, "photo": "ig_export3/media/posts/17985411370754874.webp"}];
+const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file";
+let accessToken = null, tokenClient, sheetStartRow = null, folderHandle = null;
+
+function log(id, msg, cls) { const e = document.getElementById(id); e.textContent = msg; e.className = "status" + (cls ? " " + cls : ""); }
+function unlock(id) { document.getElementById(id).classList.add("unlocked"); }
+function loadScript(src) { return new Promise((res,rej) => { const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+
+async function initGoogle() {
+  await Promise.all([loadScript("https://apis.google.com/js/api.js"), loadScript("https://accounts.google.com/gsi/client")]);
+  await new Promise(r => gapi.load("client", r));
+  await gapi.client.init({ discoveryDocs: ["https://sheets.googleapis.com/$discovery/rest?version=v4","https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
+  tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CONFIG.CLIENT_ID, scope: SCOPES, callback: async resp => {
+    if (resp.error) { log("signinStatus","Sign-in error: "+resp.error,"err"); return; }
+    accessToken = resp.access_token; gapi.client.setToken({ access_token: accessToken });
+    const me = await fetch("https://www.googleapis.com/oauth2/v3/userinfo",{headers:{Authorization:"Bearer "+accessToken}}).then(r=>r.json());
+    if (!me.email || me.email.toLowerCase() !== "mzbazeball@gmail.com") { log("signinStatus","Wrong account: "+me.email,"err"); accessToken=null; return; }
+    log("signinStatus","✓ Signed in as "+me.email,"ok");
+    unlock("card-import");
+  }});
+  document.getElementById("btnSignin").onclick = () => tokenClient.requestAccessToken({ prompt: "consent" });
+}
+initGoogle().catch(e => log("signinStatus","Failed to load Google APIs: "+e.message,"err"));
+
+document.getElementById("btnImport").onclick = async function() {
+  this.disabled = true;
+  document.getElementById("importProgress").style.display = "";
+  try {
+    const existing = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: CONFIG.SPREADSHEET_ID, range: "Sheet1!A2:A" });
+    const count = (existing.result.values || []).filter(r => r[0]).length;
+    sheetStartRow = count + 2;
+    const now = Date.now();
+    const values = ROWS.map((r,i) => [(now+i).toString(), r.date||"", r.brand||"", r.title||"", r.artist||"", r.pieces!=null?r.pieces:"", r.wooden?"TRUE":"FALSE", "FALSE", ""]);
+    await gapi.client.sheets.spreadsheets.values.append({ spreadsheetId: CONFIG.SPREADSHEET_ID, range: "Sheet1!A1", valueInputOption: "USER_ENTERED", insertDataOption: "INSERT_ROWS", resource: { values } });
+    document.getElementById("importProgress").value = values.length;
+    log("importStatus","✓ 14 rows added (starting at Sheet row "+sheetStartRow+").\nProceed to Step 3.","ok");
+    unlock("card-photos"); document.getElementById("btnUpload").disabled = false;
+  } catch(err) { log("importStatus","Error: "+err.message,"err"); this.disabled=false; }
+};
+
+document.getElementById("btnFolder").onclick = async function() {
+  try { folderHandle = await window.showDirectoryPicker({ mode: "read" }); document.getElementById("folderName").textContent = "✓ " + folderHandle.name; } catch(e) {}
+};
+
+async function resolveFile(root, path) {
+  const parts = path.split("/").filter(Boolean); let cur = root;
+  for (let i=0;i<parts.length-1;i++) { try { cur = await cur.getDirectoryHandle(parts[i]); } catch(e) { return null; } }
+  try { return await cur.getFileHandle(parts[parts.length-1]); } catch(e) { return null; }
+}
+
+document.getElementById("btnUpload").onclick = async function() {
+  if (!folderHandle) { alert("Please select the export folder first."); return; }
+  this.disabled = true;
+  const prog = document.getElementById("uploadProgress"); prog.style.display = "";
+  let uploaded=0, skipped=0, errors=0;
+  for (let i=0;i<ROWS.length;i++) {
+    const r = ROWS[i]; const sheetRow = sheetStartRow + i;
+    log("uploadStatus","Photo "+(i+1)+" of "+ROWS.length+"\n"+(r.brand||"")+" — "+(r.title||r.date||""));
+    try {
+      const relPath = r.photo.replace("ig_export3/","");
+      const h = await resolveFile(folderHandle, relPath);
+      if (!h) { skipped++; }
+      else {
+        const file = await h.getFile();
+        const baseName = [r.date,r.brand,r.title].filter(Boolean).join("_").replace(/[^a-zA-Z0-9_-]/g,"_");
+        const meta = { name: baseName+"."+(file.type.split("/")[1]||"jpg"), parents:[CONFIG.DRIVE_FOLDER_ID], mimeType:file.type };
+        const form = new FormData();
+        form.append("metadata",new Blob([JSON.stringify(meta)],{type:"application/json"}));
+        form.append("file",file);
+        const up = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",{method:"POST",headers:{Authorization:"Bearer "+accessToken},body:form});
+        const upData = await up.json(); const fileId = upData.id;
+        await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"/permissions",{method:"POST",headers:{Authorization:"Bearer "+accessToken,"Content-Type":"application/json"},body:JSON.stringify({role:"reader",type:"anyone"})});
+        await gapi.client.sheets.spreadsheets.values.update({ spreadsheetId:CONFIG.SPREADSHEET_ID, range:"Sheet1!I"+sheetRow, valueInputOption:"USER_ENTERED", resource:{values:[[fileId]]} });
+        uploaded++;
+      }
+    } catch(err) { console.error(err); errors++; }
+    prog.value = i+1;
+  }
+  log("uploadStatus","✓ Done!\nUploaded: "+uploaded+"\nNot found: "+skipped+"\nErrors: "+errors, errors>0?"err":"ok");
+};
+</script>
+</body>
+</html>
