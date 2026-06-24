@@ -1251,7 +1251,7 @@ function closeModal() {
   clearModalHash();
 }
 
-document.getElementById("modalCopyLink").addEventListener("click", () => {
+document.getElementById("modalCopyLink")?.addEventListener("click", () => {
   const url = location.href; // already set to #puzzle/[id]
   navigator.clipboard.writeText(url).then(() => {
     const btn = document.getElementById("modalCopyLink");
