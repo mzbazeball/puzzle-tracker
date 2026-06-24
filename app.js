@@ -28,6 +28,30 @@ let bulkFiles = [];
 let bulkIndex = 0;
 let bulkPuzzles = [];
 
+// Modal carousel state
+let modalPhotoIds = [];
+let modalPhotoIndex = 0;
+
+// Brand category sort
+let brandSortMode = "alpha"; // 'alpha' | 'countDesc' | 'countAsc'
+
+// Parse imageFileId — handles old plain-string IDs and new JSON-array format
+function parseImageIds(raw) {
+  if (!raw) return [];
+  if (typeof raw === "string" && raw.startsWith("[")) {
+    try { return JSON.parse(raw).filter(Boolean); } catch (e) { return [raw]; }
+  }
+  return raw ? [raw] : [];
+}
+
+// Populate brand/artist datalists from loaded puzzles
+function populateAutocomplete() {
+  const brands = [...new Set(allPuzzles.map(p => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const artists = [...new Set(allPuzzles.map(p => p.artist).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  document.getElementById("brand-list").innerHTML = brands.map(b => `<option value="${escapeHtml(b)}">`).join("");
+  document.getElementById("artist-list").innerHTML = artists.map(a => `<option value="${escapeHtml(a)}">`).join("");
+}
+
 const GROUP_TITLES = {
   pieces: "Piece Count",
   brand: "Brand",
@@ -182,7 +206,7 @@ function renderSignInButton() {
   btn.textContent = "Sign in with Google";
   btn.className = "submit-btn";
   btn.style.maxWidth = "280px";
-  btn.onclick = () => tokenClient.requestAccessToken({ prompt: "consent" });
+  btn.onclick = () => tokenClient.requestAccessToken({ prompt: "" });
   const wrap = document.getElementById("signinBtn");
   wrap.innerHTML = "";
   wrap.appendChild(btn);
@@ -353,6 +377,7 @@ document.getElementById("backBtn").addEventListener("click", () => {
 
 document.getElementById("btnTrack").addEventListener("click", () => {
   resetTrackForm();
+  populateAutocomplete();
   showScreen("screen-track");
 });
 
@@ -491,23 +516,26 @@ function setSortOrder(order) {
 function resetTrackForm() {
   editingPuzzle = null;
   document.getElementById("trackForm").reset();
-  document.getElementById("photoPreview").style.display = "none";
-  document.getElementById("photoPreview").src = "";
+  document.getElementById("photoPreviewWrap").innerHTML = "";
   document.getElementById("trackStatus").textContent = "";
   document.getElementById("f-date").value = new Date().toISOString().slice(0, 10);
   document.getElementById("saveBtn").textContent = "Save Puzzle";
 }
 
 document.getElementById("f-photo").addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const img = document.getElementById("photoPreview");
-    img.src = ev.target.result;
-    img.style.display = "block";
-  };
-  reader.readAsDataURL(file);
+  const files = Array.from(e.target.files);
+  const wrap = document.getElementById("photoPreviewWrap");
+  wrap.innerHTML = "";
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = document.createElement("img");
+      img.src = ev.target.result;
+      img.className = "photo-thumb-preview";
+      wrap.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+  });
 });
 
 document.getElementById("trackForm").addEventListener("submit", async (e) => {
@@ -525,18 +553,22 @@ document.getElementById("trackForm").addEventListener("submit", async (e) => {
     const pieces = document.getElementById("f-pieces").value;
     const wooden = document.getElementById("f-wooden").checked;
     const notCompleted = document.getElementById("f-notcompleted").checked;
-    const photoFile = document.getElementById("f-photo").files[0];
+    const photoFiles = Array.from(document.getElementById("f-photo").files);
+    const baseName = `${date}_${brand}_${title}`.replace(/[^a-zA-Z0-9_-]/g, "_");
 
     if (editingPuzzle) {
-      let imageFileId = editingPuzzle.imageFileId || "";
-      if (photoFile) {
-        status.textContent = "Uploading photo...";
-        const newFileId = await uploadPhotoToDrive(photoFile, `${date}_${brand}_${title}`.replace(/[^a-zA-Z0-9_-]/g, "_"));
-        if (imageFileId) {
-          await deletePhotoFromDrive(imageFileId);
+      // Keep existing photos, append any newly selected ones
+      let existingIds = parseImageIds(editingPuzzle.imageFileId);
+      if (photoFiles.length > 0) {
+        status.textContent = "Uploading photo(s)...";
+        const newIds = [];
+        for (let i = 0; i < photoFiles.length; i++) {
+          const fid = await uploadPhotoToDrive(photoFiles[i], `${baseName}_${Date.now()}_${i}`);
+          newIds.push(fid);
         }
-        imageFileId = newFileId;
+        existingIds = existingIds.concat(newIds);
       }
+      const imageFileId = existingIds.length === 1 ? existingIds[0] : JSON.stringify(existingIds);
 
       status.textContent = "Saving changes...";
       const row = [editingPuzzle.id, date, brand, title, artist, pieces, wooden ? "TRUE" : "FALSE", notCompleted ? "TRUE" : "FALSE", imageFileId];
@@ -544,27 +576,26 @@ document.getElementById("trackForm").addEventListener("submit", async (e) => {
 
       status.textContent = "Saved!";
       resetTrackForm();
-      setTimeout(() => {
-        showScreen("screen-home", false);
-        navStack = ["screen-home"];
-      }, 600);
+      setTimeout(() => { showScreen("screen-home", false); navStack = ["screen-home"]; }, 600);
     } else {
-      let imageUrl = "";
-      if (photoFile) {
-        status.textContent = "Uploading photo...";
-        imageUrl = await uploadPhotoToDrive(photoFile, `${date}_${brand}_${title}`.replace(/[^a-zA-Z0-9_-]/g, "_"));
+      let imageFileId = "";
+      if (photoFiles.length > 0) {
+        status.textContent = "Uploading photo(s)...";
+        const ids = [];
+        for (let i = 0; i < photoFiles.length; i++) {
+          const fid = await uploadPhotoToDrive(photoFiles[i], `${baseName}_${i}`);
+          ids.push(fid);
+        }
+        imageFileId = ids.length === 1 ? ids[0] : JSON.stringify(ids);
       }
 
       status.textContent = "Saving puzzle details...";
       const id = Date.now().toString();
-      await appendPuzzleRow([id, date, brand, title, artist, pieces, wooden ? "TRUE" : "FALSE", notCompleted ? "TRUE" : "FALSE", imageUrl]);
+      await appendPuzzleRow([id, date, brand, title, artist, pieces, wooden ? "TRUE" : "FALSE", notCompleted ? "TRUE" : "FALSE", imageFileId]);
 
       status.textContent = "Saved!";
       resetTrackForm();
-      setTimeout(() => {
-        showScreen("screen-home", false);
-        navStack = ["screen-home"];
-      }, 600);
+      setTimeout(() => { showScreen("screen-home", false); navStack = ["screen-home"]; }, 600);
     }
   } catch (err) {
     console.error(err);
@@ -747,14 +778,52 @@ function renderCategories() {
 
   currentGroups = groupPuzzles(allPuzzles, currentGroupKey);
 
-  currentGroups.forEach((group) => {
-    const btn = document.createElement("button");
-    btn.className = "option-btn";
-    btn.dataset.category = group.label;
-    btn.textContent = `${group.label} (${group.items.length})`;
-    container.appendChild(btn);
-  });
+  // Show/hide brand sort row
+  const brandSortRow = document.getElementById("brandSortRow");
+  if (currentGroupKey === "brand") {
+    brandSortRow.style.display = "";
+    // Apply current sort mode
+    let sorted = [...currentGroups];
+    if (brandSortMode === "countDesc") {
+      sorted.sort((a, b) => b.items.length - a.items.length);
+    } else if (brandSortMode === "countAsc") {
+      sorted.sort((a, b) => a.items.length - b.items.length);
+    }
+    // Update active button
+    ["sortBrandAlpha","sortBrandCountDesc","sortBrandCountAsc"].forEach(id => {
+      document.getElementById(id).classList.remove("active");
+    });
+    const activeId = brandSortMode === "countDesc" ? "sortBrandCountDesc"
+                   : brandSortMode === "countAsc"  ? "sortBrandCountAsc"
+                   : "sortBrandAlpha";
+    document.getElementById(activeId).classList.add("active");
+    sorted.forEach((group) => {
+      const btn = document.createElement("button");
+      btn.className = "option-btn";
+      btn.dataset.category = group.label;
+      btn.textContent = `${group.label} (${group.items.length})`;
+      container.appendChild(btn);
+    });
+  } else {
+    brandSortRow.style.display = "none";
+    currentGroups.forEach((group) => {
+      const btn = document.createElement("button");
+      btn.className = "option-btn";
+      btn.dataset.category = group.label;
+      btn.textContent = `${group.label} (${group.items.length})`;
+      container.appendChild(btn);
+    });
+  }
 }
+
+["sortBrandAlpha","sortBrandCountDesc","sortBrandCountAsc"].forEach(id => {
+  document.getElementById(id).addEventListener("click", () => {
+    brandSortMode = id === "sortBrandCountDesc" ? "countDesc"
+                 : id === "sortBrandCountAsc"  ? "countAsc"
+                 : "alpha";
+    renderCategories();
+  });
+});
 
 const PIECE_RANGES = [
   { min: 0, max: 99, label: "0-99" },
@@ -894,7 +963,7 @@ function renderResults() {
     const item = document.createElement("div");
     item.className = currentViewMode === "grid" ? "grid-item" : "list-item";
 
-    const imgUrl = driveImageUrl(p.imageFileId, currentViewMode === "grid" ? 400 : 100);
+    const imgUrl = driveImageUrl(parseImageIds(p.imageFileId)[0] || "", currentViewMode === "grid" ? 400 : 100);
     let imgHtml;
     if (imgUrl) {
       imgHtml = `<img src="${imgUrl}" alt="${escapeHtml(p.title)}" loading="lazy">`;
@@ -958,7 +1027,7 @@ document.getElementById("searchInput").addEventListener("input", (e) => {
   sorted.forEach((p) => {
     const item = document.createElement("div");
     item.className = "list-item";
-    const imgUrl = driveImageUrl(p.imageFileId, 100);
+    const imgUrl = driveImageUrl(parseImageIds(p.imageFileId)[0] || "", 100);
     const imgHtml = imgUrl
       ? `<img src="${imgUrl}" alt="" loading="lazy">`
       : `<div class="noimg">No photo</div>`;
@@ -977,20 +1046,38 @@ document.getElementById("searchInput").addEventListener("input", (e) => {
 
 // ---------- Modal ----------
 
-function openModal(p) {
-  currentModalPuzzle = p;
+function showModalPhoto(index) {
+  modalPhotoIndex = index;
+  const ids = modalPhotoIds;
   const modalImg = document.getElementById("modalImg");
   const modalNoImg = document.getElementById("modalNoImg");
-  const imgUrl = driveImageUrl(p.imageFileId, 800);
+  const photoPrev = document.getElementById("photoPrev");
+  const photoNext = document.getElementById("photoNext");
+  const photoDots = document.getElementById("photoDots");
 
-  if (imgUrl) {
-    modalImg.src = imgUrl;
-    modalImg.style.display = "block";
-    modalNoImg.style.display = "none";
-  } else {
+  if (ids.length === 0) {
     modalImg.style.display = "none";
     modalNoImg.style.display = "flex";
+    photoPrev.style.display = "none";
+    photoNext.style.display = "none";
+    photoDots.innerHTML = "";
+  } else {
+    modalImg.src = driveImageUrl(ids[index], 800);
+    modalImg.style.display = "block";
+    modalNoImg.style.display = "none";
+    const multi = ids.length > 1;
+    photoPrev.style.display = (multi && index > 0) ? "flex" : "none";
+    photoNext.style.display = (multi && index < ids.length - 1) ? "flex" : "none";
+    photoDots.innerHTML = multi
+      ? ids.map((_, i) => `<span class="photo-dot${i === index ? " active" : ""}"></span>`).join("")
+      : "";
   }
+}
+
+function openModal(p) {
+  currentModalPuzzle = p;
+  modalPhotoIds = parseImageIds(p.imageFileId);
+  showModalPhoto(0);
 
   document.getElementById("modalDate").textContent = p.date;
   document.getElementById("modalBrand").textContent = p.brand;
@@ -1005,6 +1092,26 @@ function openModal(p) {
 
   document.getElementById("modalOverlay").classList.add("active");
 }
+
+document.getElementById("photoPrev").addEventListener("click", () => {
+  if (modalPhotoIndex > 0) showModalPhoto(modalPhotoIndex - 1);
+});
+document.getElementById("photoNext").addEventListener("click", () => {
+  if (modalPhotoIndex < modalPhotoIds.length - 1) showModalPhoto(modalPhotoIndex + 1);
+});
+
+// Touch swipe support
+(function() {
+  const modal = document.getElementById("modalOverlay");
+  let touchStartX = 0;
+  modal.addEventListener("touchstart", e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  modal.addEventListener("touchend", e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) < 40) return;
+    if (dx < 0 && modalPhotoIndex < modalPhotoIds.length - 1) showModalPhoto(modalPhotoIndex + 1);
+    if (dx > 0 && modalPhotoIndex > 0) showModalPhoto(modalPhotoIndex - 1);
+  }, { passive: true });
+})();
 
 document.getElementById("modalClose").addEventListener("click", () => {
   document.getElementById("modalOverlay").classList.remove("active");
@@ -1055,9 +1162,9 @@ document.getElementById("modalDelete").addEventListener("click", async () => {
   document.getElementById("modalOverlay").classList.remove("active");
 
   try {
-    // Delete photo from Drive first (best-effort)
-    if (p.imageFileId) {
-      await deletePhotoFromDrive(p.imageFileId);
+    // Delete photo(s) from Drive first (best-effort)
+    for (const fid of parseImageIds(p.imageFileId)) {
+      await deletePhotoFromDrive(fid).catch(() => {});
     }
     // Delete the Sheet row
     await deletePuzzleRow(p.rowNumber);
@@ -1089,17 +1196,17 @@ function startEditPuzzle(p) {
   document.getElementById("f-wooden").checked = !!p.wooden;
   document.getElementById("f-notcompleted").checked = !!p.notCompleted;
 
-  const preview = document.getElementById("photoPreview");
-  const existingUrl = driveImageUrl(p.imageFileId, 400);
-  if (existingUrl) {
-    preview.src = existingUrl;
-    preview.style.display = "block";
-  } else {
-    preview.style.display = "none";
-    preview.src = "";
-  }
+  const wrap = document.getElementById("photoPreviewWrap");
+  wrap.innerHTML = "";
+  parseImageIds(p.imageFileId).forEach(fid => {
+    const img = document.createElement("img");
+    img.src = driveImageUrl(fid, 400);
+    img.className = "photo-thumb-preview";
+    wrap.appendChild(img);
+  });
 
   document.getElementById("saveBtn").textContent = "Update Puzzle";
+  populateAutocomplete();
   showScreen("screen-track");
   document.getElementById("headerTitle").textContent = "Edit Puzzle";
 }
