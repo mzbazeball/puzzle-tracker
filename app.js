@@ -260,6 +260,12 @@ document.getElementById("btnOwnerSignIn").addEventListener("click", () => {
   showScreen("screen-signin");
 });
 
+document.getElementById("headerTitle").addEventListener("click", () => {
+  if (document.getElementById("modalOverlay").classList.contains("active")) closeModal();
+  navStack = ["screen-home"];
+  showScreen("screen-home", false);
+});
+
 // ---------- Session persistence ----------
 
 const SESSION_KEY = "puzzleTrackerSession_v1";
