@@ -196,9 +196,12 @@ async function initGoogle() {
     return;
   }
 
-  // No cached token: stay on the public home screen. Owner can tap
-  // "Owner sign in" to authenticate; we don't force a sign-in prompt
-  // for anonymous viewers.
+  // No cached token — handle hash URL for public visitors, then show home.
+  const hashNav = await navigateToHash();
+  if (!hashNav) {
+    navStack = ["screen-home"];
+    showScreen("screen-home", false);
+  }
 }
 
 function renderSignInButton() {
@@ -215,6 +218,9 @@ function renderSignInButton() {
 async function onSignedIn() {
   document.getElementById("signOutBtn").style.visibility = "visible";
   await applyAccessControls();
+  // Hash URL takes priority over session restore
+  const hashNav = await navigateToHash();
+  if (hashNav) return;
   const restored = await restoreSession();
   if (!restored) {
     navStack = ["screen-home"];
@@ -334,6 +340,131 @@ async function restoreSession() {
   return false;
 }
 
+// ---------- Hash Routing ----------
+
+function buildHash() {
+  const screen = navStack[navStack.length - 1] || "screen-home";
+  if (screen === "screen-home") return "";
+  if (screen === "screen-search") return "search";
+  if (screen === "screen-view-options") return "view";
+  if (screen === "screen-view-date-options") return "view/date";
+  if (screen === "screen-view-categories") return "view/" + (currentGroupKey || "");
+  if (screen === "screen-view-results") {
+    if (currentGroupKey === "all") return "view/all";
+    if (currentGroupKey === "wooden") return "view/wooden";
+    if (currentGroupValue) return "view/" + currentGroupKey + "/" + encodeURIComponent(currentGroupValue);
+    return "view/" + (currentGroupKey || "");
+  }
+  return "";
+}
+
+function updateHash() {
+  const hash = buildHash();
+  history.replaceState(null, "", hash ? "#" + hash : location.pathname + location.search);
+}
+
+function setModalHash(puzzleId) {
+  history.replaceState(null, "", "#puzzle/" + encodeURIComponent(puzzleId));
+}
+
+function clearModalHash() {
+  const hash = buildHash();
+  history.replaceState(null, "", hash ? "#" + hash : location.pathname + location.search);
+}
+
+async function navigateToHash() {
+  const raw = location.hash.slice(1);
+  if (!raw) return false;
+
+  const parts = raw.split("/");
+  const section = parts[0];
+
+  if (section === "search") {
+    navStack = ["screen-home", "screen-search"];
+    showScreen("screen-search", false);
+    return true;
+  }
+
+  // Ensure puzzles are loaded (works via API key without auth)
+  if (!allPuzzles.length) {
+    try { allPuzzles = await fetchAllPuzzles(); } catch (e) { return false; }
+  }
+
+  if (section === "puzzle") {
+    const id = decodeURIComponent(parts[1] || "");
+    const puzzle = allPuzzles.find(p => p.id === id);
+    if (!puzzle) return false;
+    navStack = ["screen-home"];
+    showScreen("screen-home", false);
+    openModal(puzzle);
+    return true;
+  }
+
+  if (section === "view") {
+    const groupKey = parts[1];
+    const groupValue = parts[2] ? decodeURIComponent(parts[2]) : null;
+
+    if (!groupKey || groupKey === "options") {
+      navStack = ["screen-home", "screen-view-options"];
+      showScreen("screen-view-options", false);
+      return true;
+    }
+
+    if (groupKey === "date") {
+      navStack = ["screen-home", "screen-view-options", "screen-view-date-options"];
+      showScreen("screen-view-date-options", false);
+      return true;
+    }
+
+    currentGroupKey = groupKey;
+
+    if (groupKey === "all") {
+      navStack = ["screen-home", "screen-view-options", "screen-view-results"];
+      const items = [...allPuzzles].sort((a, b) => a.date < b.date ? 1 : -1);
+      currentGroups = [{ label: "All Tracked Puzzles", items }];
+      currentGroupValue = "All Tracked Puzzles";
+      showScreen("screen-view-results", false);
+      document.getElementById("headerTitle").textContent = "All Tracked Puzzles";
+      renderResults();
+      return true;
+    }
+
+    if (groupKey === "wooden") {
+      navStack = ["screen-home", "screen-view-options", "screen-view-results"];
+      const items = allPuzzles.filter(p => p.wooden).sort((a, b) => a.date < b.date ? 1 : -1);
+      currentGroups = [{ label: "Wooden Puzzles", items }];
+      currentGroupValue = "Wooden Puzzles";
+      showScreen("screen-view-results", false);
+      document.getElementById("headerTitle").textContent = "Wooden Puzzles";
+      renderResults();
+      return true;
+    }
+
+    currentGroups = groupPuzzles(allPuzzles, groupKey);
+    const dateGroups = ["year", "yearmonth"];
+
+    if (groupValue) {
+      currentGroupValue = groupValue;
+      navStack = dateGroups.includes(groupKey)
+        ? ["screen-home", "screen-view-options", "screen-view-date-options", "screen-view-categories", "screen-view-results"]
+        : ["screen-home", "screen-view-options", "screen-view-categories", "screen-view-results"];
+      showScreen("screen-view-results", false);
+      document.getElementById("headerTitle").textContent = groupValue;
+      renderResults();
+    } else {
+      navStack = dateGroups.includes(groupKey)
+        ? ["screen-home", "screen-view-options", "screen-view-date-options", "screen-view-categories"]
+        : ["screen-home", "screen-view-options", "screen-view-categories"];
+      document.getElementById("headerTitle").textContent = GROUP_TITLES[groupKey] || "View Tracked Puzzles";
+      renderCategories();
+      showScreen("screen-view-categories", false);
+    }
+    return true;
+  }
+
+  return false;
+}
+
 // ---------- Navigation ----------
 
 function showScreen(id, pushHistory = true) {
@@ -360,6 +491,7 @@ function showScreen(id, pushHistory = true) {
   }
 
   saveSession();
+  updateHash();
 }
 
 document.getElementById("backBtn").addEventListener("click", () => {
@@ -1091,6 +1223,7 @@ function openModal(p) {
   document.getElementById("modalDelete").style.display = isOwner ? "" : "none";
 
   document.getElementById("modalOverlay").classList.add("active");
+  if (p.id) setModalHash(p.id);
 }
 
 document.getElementById("photoPrev").addEventListener("click", () => {
@@ -1113,19 +1246,31 @@ document.getElementById("photoNext").addEventListener("click", () => {
   }, { passive: true });
 })();
 
-document.getElementById("modalClose").addEventListener("click", () => {
+function closeModal() {
   document.getElementById("modalOverlay").classList.remove("active");
+  clearModalHash();
+}
+
+document.getElementById("modalCopyLink").addEventListener("click", () => {
+  const url = location.href; // already set to #puzzle/[id]
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById("modalCopyLink");
+    const orig = btn.textContent;
+    btn.textContent = "✓ Copied!";
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }).catch(() => {
+    prompt("Copy this link:", url);
+  });
 });
+document.getElementById("modalClose").addEventListener("click", closeModal);
 document.getElementById("modalOverlay").addEventListener("click", (e) => {
-  if (e.target.id === "modalOverlay") {
-    document.getElementById("modalOverlay").classList.remove("active");
-  }
+  if (e.target.id === "modalOverlay") closeModal();
 });
 
 document.getElementById("modalEdit").addEventListener("click", () => {
   if (!currentModalPuzzle) return;
   startEditPuzzle(currentModalPuzzle);
-  document.getElementById("modalOverlay").classList.remove("active");
+  closeModal();
 });
 
 async function deletePuzzleRow(rowNumber) {
