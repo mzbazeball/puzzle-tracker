@@ -712,9 +712,18 @@ document.getElementById("trackForm").addEventListener("submit", async (e) => {
       const row = [editingPuzzle.id, date, brand, title, artist, pieces, wooden ? "TRUE" : "FALSE", notCompleted ? "TRUE" : "FALSE", imageFileId];
       await updatePuzzleRow(editingPuzzle.rowNumber, row);
 
+      // Update cached puzzle object so the modal shows fresh data
+      const updatedPuzzle = { ...editingPuzzle, date, brand, title, artist, pieces, wooden, notCompleted, imageFileId };
+      const idx = allPuzzles.findIndex(p => p.rowNumber === editingPuzzle.rowNumber);
+      if (idx !== -1) allPuzzles[idx] = updatedPuzzle;
+
       status.textContent = "Saved!";
       resetTrackForm();
-      setTimeout(() => { showScreen("screen-home", false); navStack = ["screen-home"]; }, 600);
+      setTimeout(() => {
+        navStack.pop(); // remove screen-track
+        showScreen(navStack[navStack.length - 1] || "screen-home", false);
+        openModal(updatedPuzzle);
+      }, 600);
     } else {
       let imageFileId = "";
       if (photoFiles.length > 0) {
