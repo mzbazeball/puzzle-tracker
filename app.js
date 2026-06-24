@@ -507,6 +507,14 @@ document.getElementById("backBtn").addEventListener("click", () => {
     showScreen(prev, false);
     if (prev === "screen-view-categories") {
       document.getElementById("headerTitle").textContent = GROUP_TITLES[currentGroupKey] || "View Tracked Puzzles";
+      // Scroll the previously-selected category back into view
+      if (currentGroupValue) {
+        requestAnimationFrame(() => {
+          const btn = [...document.querySelectorAll("#categoriesContainer .option-btn")]
+            .find(b => b.dataset.category === currentGroupValue);
+          if (btn) btn.scrollIntoView({ block: "center", behavior: "instant" });
+        });
+      }
     } else if (prev === "screen-view-results") {
       document.getElementById("headerTitle").textContent = currentGroupValue || "Tracked Puzzles";
     }
