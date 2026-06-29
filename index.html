@@ -351,6 +351,29 @@
     padding:40px 20px;
     font-style:italic;
   }
+  .autocomplete-wrap{ position:relative; }
+  .autocomplete-dropdown{
+    display:none;
+    position:absolute;
+    left:0; right:0; top:100%;
+    background:#fff;
+    border:1px solid #ccc;
+    border-radius:8px;
+    max-height:200px;
+    overflow-y:auto;
+    z-index:1000;
+    box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  }
+  .autocomplete-dropdown.open{ display:block; }
+  .autocomplete-option{
+    padding:12px 14px;
+    cursor:pointer;
+    font-size:0.95rem;
+    font-family:inherit;
+    border-bottom:1px solid #f0ece4;
+  }
+  .autocomplete-option:last-child{ border-bottom:none; }
+  .autocomplete-option:active{ background:var(--tan); }
   .status-msg{
     text-align:center;
     padding:14px;
@@ -421,8 +444,10 @@
       </div>
       <div class="field">
         <label for="f-brand">Puzzle Brand</label>
-        <input type="text" id="f-brand" placeholder="e.g. Ravensburger" autocomplete="off" list="brand-list">
-        <datalist id="brand-list"></datalist>
+        <div class="autocomplete-wrap">
+          <input type="text" id="f-brand" placeholder="e.g. Ravensburger" autocomplete="off">
+          <div class="autocomplete-dropdown" id="brand-dropdown"></div>
+        </div>
       </div>
       <div class="field">
         <label for="f-title">Puzzle Title</label>
@@ -430,8 +455,10 @@
       </div>
       <div class="field">
         <label for="f-artist">Puzzle Artist</label>
-        <input type="text" id="f-artist" placeholder="e.g. Jane Smith" autocomplete="off" list="artist-list">
-        <datalist id="artist-list"></datalist>
+        <div class="autocomplete-wrap">
+          <input type="text" id="f-artist" placeholder="e.g. Jane Smith" autocomplete="off">
+          <div class="autocomplete-dropdown" id="artist-dropdown"></div>
+        </div>
       </div>
       <div class="field">
         <label for="f-pieces">Piece Count</label>
