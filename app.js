@@ -45,11 +45,46 @@ function parseImageIds(raw) {
 }
 
 // Populate brand/artist datalists from loaded puzzles
+function setupAutocomplete(inputId, dropdownId, getOptions) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  if (!input || !dropdown) return;
+
+  function showDropdown(val) {
+    const q = val.toLowerCase();
+    const matches = getOptions().filter(o => o.toLowerCase().includes(q)).slice(0, 30);
+    if (!matches.length || !val) { dropdown.classList.remove("open"); return; }
+    dropdown.innerHTML = matches.map(o =>
+      `<div class="autocomplete-option">${escapeHtml(o)}</div>`
+    ).join("");
+    dropdown.classList.add("open");
+    dropdown.querySelectorAll(".autocomplete-option").forEach(el => {
+      el.addEventListener("mousedown", e => { e.preventDefault(); });
+      el.addEventListener("click", () => {
+        input.value = el.textContent;
+        dropdown.classList.remove("open");
+        input.dispatchEvent(new Event("change"));
+      });
+      el.addEventListener("touchend", e => {
+        e.preventDefault();
+        input.value = el.textContent;
+        dropdown.classList.remove("open");
+        input.blur();
+        input.dispatchEvent(new Event("change"));
+      });
+    });
+  }
+
+  input.addEventListener("input", () => showDropdown(input.value));
+  input.addEventListener("focus", () => { if (input.value) showDropdown(input.value); });
+  input.addEventListener("blur", () => setTimeout(() => dropdown.classList.remove("open"), 150));
+}
+
 function populateAutocomplete() {
-  const brands = [...new Set(allPuzzles.map(p => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const artists = [...new Set(allPuzzles.map(p => p.artist).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  document.getElementById("brand-list").innerHTML = brands.map(b => `<option value="${escapeHtml(b)}">`).join("");
-  document.getElementById("artist-list").innerHTML = artists.map(a => `<option value="${escapeHtml(a)}">`).join("");
+  const brands = () => [...new Set(allPuzzles.map(p => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const artists = () => [...new Set(allPuzzles.map(p => p.artist).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  setupAutocomplete("f-brand", "brand-dropdown", brands);
+  setupAutocomplete("f-artist", "artist-dropdown", artists);
 }
 
 const GROUP_TITLES = {
